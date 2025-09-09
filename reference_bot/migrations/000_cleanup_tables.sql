@@ -1,0 +1,11 @@
+-- Очистка существующих таблиц перед созданием новых
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS applications CASCADE;
+DROP TABLE IF EXISTS assignment CASCADE;
+DROP TABLE IF EXISTS task CASCADE;
+DROP TABLE IF EXISTS audit_log CASCADE;
+DROP TABLE IF EXISTS pending_users CASCADE;
+DROP TABLE IF EXISTS faq CASCADE;
+DROP TABLE IF EXISTS spot_task CASCADE;
+DROP TABLE IF EXISTS spot_task_response CASCADE;
+DROP TABLE IF EXISTS apscheduler_jobs CASCADE;

@@ -1,0 +1,136 @@
+@startuml CBC Crew Selection Bot Database ER Diagram
+
+!define ENTITY class
+!define ATTRIBUTE field
+!define PRIMARY_KEY <<PK>>
+!define FOREIGN_KEY <<FK>>
+!define UNIQUE <<U>>
+!define NOT_NULL <<NN>>
+
+title CBC Crew Selection Bot - Database ER Diagram
+
+' Entities
+ENTITY users {
+  + id : SERIAL PRIMARY_KEY
+  + user_id : BIGINT UNIQUE NOT_NULL
+  + created : TIMESTAMP WITH TIME ZONE NOT_NULL
+  + tz_region : VARCHAR(100)
+  + tz_offset : VARCHAR(10)
+  + longitude : DECIMAL(10, 7)
+  + latitude : DECIMAL(10, 7)
+  + language : VARCHAR(5) NOT_NULL
+  + role : VARCHAR(20) NOT_NULL
+  + is_alive : BOOLEAN NOT_NULL
+  + is_blocked : BOOLEAN NOT_NULL
+}
+
+ENTITY applications {
+  + id : SERIAL PRIMARY_KEY
+  + user_id : BIGINT UNIQUE NOT_NULL
+  + status : application_status NOT_NULL
+  + created : TIMESTAMP WITH TIME ZONE NOT_NULL
+  + updated : TIMESTAMP WITH TIME ZONE NOT_NULL
+  --
+  ' Personal Information
+  + full_name : VARCHAR(255)
+  + university : VARCHAR(255)
+  + course : INTEGER
+  + phone : VARCHAR(50)
+  + email : VARCHAR(255)
+  + telegram_username : VARCHAR(255)
+  + how_found_kbk : TEXT
+  --
+  ' Job Preferences (Priority System)
+  + department_1 : VARCHAR(255)
+  + position_1 : VARCHAR(255)
+  + department_2 : VARCHAR(255)
+  + position_2 : VARCHAR(255)
+  + department_3 : VARCHAR(255)
+  + position_3 : VARCHAR(255)
+  --
+  ' Additional Information
+  + experience : TEXT
+  + motivation : TEXT
+  + resume_local_path : VARCHAR(500)
+  + resume_google_drive_url : VARCHAR(500)
+  + previous_department : VARCHAR(255)
+}
+
+' Enums
+enum UserRole {
+  admin
+  owner
+  user
+}
+
+enum ApplicationStatus {
+  not_submitted
+  submitted
+  canceled
+  rejected
+  accepted
+  stage_1
+  stage_2
+  stage_3
+  approved
+}
+
+' Relationships
+users ||--o| applications : "user_id"
+
+' Notes
+note right of users
+  - user_id связан с Telegram user ID
+  - role определяет права доступа
+  - tz_region/tz_offset для временных зон
+  - longitude/latitude для геолокации
+  - language для локализации (по умолчанию 'ru')
+  - is_alive/is_blocked для управления пользователями
+end note
+
+note right of applications
+  - user_id связывает с таблицей users
+  - status отслеживает этап отбора
+  - Система приоритетов (1-3) для выбора вакансий
+  - previous_department для повторных участников
+  - resume хранится локально и в Google Drive
+  - course от 1 до 6 (курс университета)
+end note
+
+note bottom of ApplicationStatus
+  Статусы отбора:
+  - not_submitted: заявка не подана
+  - submitted: заявка подана
+  - canceled: отменена пользователем
+  - rejected: отклонена
+  - accepted: принята
+  - stage_1/2/3: этапы отбора (legacy)
+  - approved: утверждена
+end note
+
+note bottom of UserRole
+  Роли пользователей:
+  - user: обычный пользователь
+  - admin: администратор
+  - owner: владелец системы
+end note
+
+' Indexes
+note top of users
+  Индексы:
+  - idx_users_user_id (user_id)
+  - idx_users_language (language)
+  - idx_users_role (role)
+end note
+
+note top of applications
+  Индексы:
+  - idx_applications_user_id (user_id)
+  - idx_applications_status (status)
+  - idx_applications_created (created)
+  - idx_applications_department_1 (department_1)
+  - idx_applications_department_2 (department_2)
+  - idx_applications_department_3 (department_3)
+end note
+
+@enduml
