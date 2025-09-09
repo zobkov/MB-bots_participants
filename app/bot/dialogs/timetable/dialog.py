@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, List, Any
 from aiogram_dialog import Dialog, Window, DialogManager
-from aiogram_dialog.widgets.kbd import Button, Column, Back, Select, Group
+from aiogram_dialog.widgets.kbd import Button, Column, Back, Select, Group, Cancel
 from aiogram_dialog.widgets.text import Const, Format
 from aiogram.types import CallbackQuery
 
@@ -49,11 +49,11 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
         day_events = config.get_day_events(selected_day)
         
         # Формируем текст расписания
-        schedule_text = f"Расписание - День {selected_day}\n\n"
+        schedule_text = f"<b>Расписание - День {selected_day}</b>\n\n"
         
         events_data = []
         for event in day_events:
-            schedule_text += f"{event.start_time}-{event.end_time} – <b>{event.title}</b> ({event.location})\n"
+            schedule_text += f"{event.start_time}-{event.end_time} – <b>{event.title}</b> ({event.location})\n\n"
             events_data.append({
                 "id": hash(f"{event.title}_{event.start_date}_{event.start_time}"),  # Уникальный ID
                 "title": event.title,
@@ -153,6 +153,7 @@ timetable_dialog = Dialog(
             ),
             width=1
         ),
+        Cancel(Const("⬅️ Назад"),id="timetable_to_menu"),
         state=TimetableSG.days_list,
         getter=get_days_data,
     ),
@@ -170,7 +171,7 @@ timetable_dialog = Dialog(
             ),
             width=1
         ),
-        Back(Const("Назад"), id="back_to_days"),
+        Back(Const("⬅️ Назад"), id="back_to_days"),
         state=TimetableSG.day_events,
         getter=get_day_events_data,
     ),
@@ -178,7 +179,7 @@ timetable_dialog = Dialog(
     # Окно с детальной информацией о событии
     Window(
         Format("{event_detail}"),
-        Back(Const("Назад"), id="back_to_events"),
+        Back(Const("⬅️ Назад"), id="back_to_events"),
         state=TimetableSG.event_detail,
         getter=get_event_detail_data,
         parse_mode="HTML"
