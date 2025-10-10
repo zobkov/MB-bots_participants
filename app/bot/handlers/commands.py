@@ -55,7 +55,9 @@ async def start_command(message: Message, dialog_manager: DialogManager):
     else:
         logger.info(f"Existing user started bot: {user_id} ({visible_name})")
     
-    await dialog_manager.start(StartSG.welcome, mode=StartMode.RESET_STACK)
+    #await dialog_manager.start(StartSG.welcome, mode=StartMode.RESET_STACK)
+    from app.bot.states.main_menu import MainMenuSG
+    await dialog_manager.start(MainMenuSG.main_menu, mode=StartMode.RESET_STACK)
 
 
 @router.message(Command("menu"))
@@ -91,6 +93,7 @@ async def help_command(message: Message):
             "\n<b>🔧 Административные команды:</b>\n"
             "/debate_stats - Статистика регистрации на дебаты\n"
             "/detailed_stats - Детальная статистика с именами\n"
+            "/user_info <user_id> - Информация о пользователе\n"
             "/reset_user_registration <user_id> - Сбросить регистрацию пользователя\n"
             "/sync_debate_cache - Синхронизировать кеш с БД\n\n"
             "<b>🧪 Команды для тестирования:</b>\n"
@@ -398,3 +401,59 @@ async def detailed_stats_command(message: Message, dialog_manager: DialogManager
     except Exception as e:
         logger.error(f"Error getting detailed stats: {e}")
         await message.answer("❌ Ошибка при получении детальной статистики")
+
+
+@router.message(Command("user_info"))
+async def user_info_command(message: Message, dialog_manager: DialogManager):
+    """Команда для получения информации о конкретном пользователе"""
+    # Проверяем права доступа (только для админов)
+    from config.config import load_config
+    config = load_config()
+    
+    if message.from_user.id not in config.logging.admin_ids:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+    
+    # Получаем user_id из команды
+    command_parts = message.text.split()
+    if len(command_parts) != 2:
+        await message.answer(
+            "Использование: /user_info <user_id>\n"
+            "Пример: /user_info 123456789"
+        )
+        return
+    
+    try:
+        target_user_id = int(command_parts[1])
+    except ValueError:
+        await message.answer("❌ Неверный формат user_id")
+        return
+    
+    # Получаем менеджеры из middleware
+    db_manager = dialog_manager.middleware_data["db_manager"]
+    redis_manager = dialog_manager.middleware_data["redis_manager"]
+    
+    try:
+        # Получаем информацию о пользователе
+        user = await db_manager.get_user(target_user_id)
+        if not user:
+            await message.answer(f"❌ Пользователь {target_user_id} не найден в базе данных")
+            return
+        
+        # Формируем ответ
+        info_text = f"<b>👤 Информация о пользователе</b>\n\n"
+        info_text += f"<b>ID:</b> {user.id}\n"
+        info_text += f"<b>Username:</b> @{user.username}\n" if user.username else "<b>Username:</b> —\n"
+        info_text += f"<b>Visible Name:</b> {user.visible_name}\n"
+        
+        if user.debate_reg:
+            case_name = await redis_manager.get_case_name(user.debate_reg)
+            info_text += f"<b>Регистрация на дебаты:</b> Кейс {user.debate_reg} ({case_name})\n"
+        else:
+            info_text += f"<b>Регистрация на дебаты:</b> Не зарегистрирован\n"
+        
+        await message.answer(info_text, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Error getting user info: {e}")
+        await message.answer("❌ Ошибка при получении информации о пользователе")

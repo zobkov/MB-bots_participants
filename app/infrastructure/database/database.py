@@ -65,8 +65,8 @@ class DatabaseManager:
             logger.info(f"Created new user: {user}")
             return user
     
-    async def update_user_debate_registration(self, user_id: int, case_number: int) -> bool:
-        """Update user's debate registration"""
+    async def update_user_debate_registration(self, user_id: int, case_number: Optional[int]) -> bool:
+        """Update user's debate registration (case_number can be None to unregister)"""
         async with self.sessionmaker() as session:
             try:
                 result = await session.execute(
@@ -79,7 +79,11 @@ class DatabaseManager:
                     
                 user.debate_reg = case_number
                 await session.commit()
-                logger.info(f"Updated user {user_id} debate registration to case {case_number}")
+                
+                if case_number is None:
+                    logger.info(f"Unregistered user {user_id} from debate")
+                else:
+                    logger.info(f"Updated user {user_id} debate registration to case {case_number}")
                 return True
             except Exception as e:
                 logger.error(f"Error updating user {user_id} debate registration: {e}")
