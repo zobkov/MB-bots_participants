@@ -11,6 +11,7 @@ from config.config import load_config
 from app.bot.handlers.commands import router as commands_router
 from app.bot.middlewares.error_handler import ErrorHandlerMiddleware
 from app.bot.middlewares.config import ConfigMiddleware
+from app.bot.middlewares.logging_context import LoggingContextMiddleware
 
 # Импорт всех диалогов
 from app.bot.dialogs.start import start_dialog
@@ -19,6 +20,9 @@ from app.bot.dialogs.timetable import timetable_dialog
 from app.bot.dialogs.navigation import navigation_dialog
 from app.bot.dialogs.faq import faq_dialog
 from app.bot.dialogs.registration import registration_dialog
+
+# Импорт системы уведомлений
+from app.infrastructure.telegram_logging import start_log_worker
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +74,14 @@ async def main():
     dp["bot"] = bot
     
     # Подключение middleware
+    dp.update.middleware(LoggingContextMiddleware())  # Добавляем первым для контекста логов
     dp.update.middleware(ConfigMiddleware(config))
     dp.update.middleware(ErrorHandlerMiddleware())
+    
+    # Запуск воркера уведомлений для админов
+    log_worker_task = None
+    if config.logging.admin_ids:
+        log_worker_task = await start_log_worker(bot, config.logging.admin_ids)
     
     # Подключение роутеров
     dp.include_router(commands_router)
@@ -99,6 +109,15 @@ async def main():
     finally:
         # Закрытие соединений
         logger.info("Shutting down...")
+        
+        # Останавливаем воркер уведомлений
+        if log_worker_task and not log_worker_task.done():
+            log_worker_task.cancel()
+            try:
+                await log_worker_task
+            except asyncio.CancelledError:
+                pass
+        
         await bot.session.close()
         if storage.redis:
             await storage.redis.aclose()

@@ -58,7 +58,8 @@ def setup_logging(
     log_level: str = "INFO",
     log_dir: str = "logs",
     console_output: bool = True,
-    file_prefix: str = "bot"
+    file_prefix: str = "bot",
+    admin_ids: list = None
 ) -> None:
     """
     Настройка логирования для бота.
@@ -68,14 +69,21 @@ def setup_logging(
         log_dir: Директория для сохранения логов
         console_output: Выводить ли логи в консоль
         file_prefix: Префикс для имен файлов логов
+        admin_ids: Список ID администраторов для уведомлений
     """
     
     # Конвертируем строку в уровень логирования
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
     
-    # Создаем форматтер
-    formatter = logging.Formatter(
+    # Создаем форматтер для файлов и консоли
+    detailed_formatter = logging.Formatter(
         fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    
+    # Форматтер с контекстом для консоли
+    context_formatter = logging.Formatter(
+        fmt="%(asctime)s %(levelname)s %(name)s | %(message)s | user=%(user_id)s chat=%(chat_id)s upd=%(update_type)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
     
@@ -93,23 +101,38 @@ def setup_logging(
         encoding="utf-8"
     )
     file_handler.setLevel(numeric_level)
-    file_handler.setFormatter(formatter)
+    file_handler.setFormatter(detailed_formatter)
     root_logger.addHandler(file_handler)
     
     # Настраиваем консольный обработчик (если нужен)
     if console_output:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(numeric_level)
-        console_handler.setFormatter(formatter)
+        console_handler.setFormatter(context_formatter)
+        
+        # Добавляем фильтр контекста для консоли
+        from app.infrastructure.telegram_logging import ContextFilter
+        console_handler.addFilter(ContextFilter())
+        
         root_logger.addHandler(console_handler)
+    
+    # Настраиваем Telegram handler если есть админы
+    if admin_ids:
+        from app.infrastructure.telegram_logging import setup_telegram_logging
+        telegram_handler = setup_telegram_logging(admin_ids)
+        if telegram_handler:
+            root_logger.addHandler(telegram_handler)
+            logging.info(f"Telegram notifications enabled for {len(admin_ids)} admin(s)")
     
     # Устанавливаем уровни для популярных библиотек
     logging.getLogger("aiogram").setLevel(logging.WARNING)
     logging.getLogger("aiogram_dialog").setLevel(logging.WARNING)
     logging.getLogger("redis").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     
-    logging.info(f"Logging configured - Level: {log_level}, Dir: {log_dir}")
+    logging.info(f"Logging configured - Level: {log_level}, Dir: {log_dir}, Admins: {len(admin_ids or [])}")
 
 
 def get_log_files_info(log_dir: str = "logs") -> list:

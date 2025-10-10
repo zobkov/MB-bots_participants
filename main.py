@@ -20,7 +20,8 @@ if __name__ == "__main__":
         log_level=config.logging.level,
         log_dir=config.logging.log_dir,
         console_output=config.logging.console_output,
-        file_prefix=config.logging.file_prefix
+        file_prefix=config.logging.file_prefix,
+        admin_ids=config.logging.admin_ids
     )
     
     # Очищаем старые логи
@@ -34,6 +35,7 @@ if __name__ == "__main__":
     logging.info("Starting Telegram Bot...")
     logging.info(f"Log level: {config.logging.level}")
     logging.info(f"Log directory: {config.logging.log_dir}")
+    logging.info(f"Admin notifications: {len(config.logging.admin_ids)} admin(s)")
     
     try:
         asyncio.run(main())

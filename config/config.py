@@ -37,6 +37,7 @@ class LoggingConfig:
     console_output: bool
     file_prefix: str
     retention_days: int
+    admin_ids: List[int]
 
 
 @dataclass
@@ -125,7 +126,8 @@ def load_config(path: str = None) -> Config:
         log_dir=env.str("LOG_DIR", "logs"),
         console_output=env.bool("CONSOLE_OUTPUT", True),
         file_prefix=env.str("LOG_FILE_PREFIX", "bot"),
-        retention_days=env.int("LOG_RETENTION_DAYS", 30)
+        retention_days=env.int("LOG_RETENTION_DAYS", 30),
+        admin_ids=[int(x.strip()) for x in env.str("ADMIN_IDS", "").split(",") if x.strip()]
     )
 
     # Загрузка конфигурации из JSON
