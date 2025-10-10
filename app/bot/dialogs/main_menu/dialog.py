@@ -11,7 +11,7 @@ main_menu_dialog = Dialog(
         Const("Главное меню"),
         Column(
             Button(
-                Const("Расписание"),
+                Const("🔒 Расписание"),
                 id="timetable",
                 on_click=go_to_timetable
             ),
@@ -21,12 +21,12 @@ main_menu_dialog = Dialog(
                 on_click=go_to_registration
             ),
             Button(
-                Const("Навигация"),
+                Const("🔒 Навигация"),
                 id="navigation",
                 on_click=go_to_navigation
             ),
             Button(
-                Const("FAQ"),
+                Const("🔒 FAQ"),
                 id="faq",
                 on_click=go_to_faq
             ),
