@@ -31,6 +31,15 @@ class TgBot:
 
 
 @dataclass
+class LoggingConfig:
+    level: str
+    log_dir: str
+    console_output: bool
+    file_prefix: str
+    retention_days: int
+
+
+@dataclass
 class Event:
     title: str
     description: str
@@ -54,6 +63,7 @@ class Config:
     tg_bot: TgBot
     db: DatabaseConfig
     redis: RedisConfig
+    logging: LoggingConfig
     start_date: datetime
     events: List[Event]
 
@@ -109,6 +119,15 @@ def load_config(path: str = None) -> Config:
         password=env.str("REDIS_PASSWORD")
     )
 
+    # Конфигурация логирования
+    logging_config = LoggingConfig(
+        level=env.str("LOG_LEVEL", "INFO"),
+        log_dir=env.str("LOG_DIR", "logs"),
+        console_output=env.bool("CONSOLE_OUTPUT", True),
+        file_prefix=env.str("LOG_FILE_PREFIX", "bot"),
+        retention_days=env.int("LOG_RETENTION_DAYS", 30)
+    )
+
     # Загрузка конфигурации из JSON
     config_path = "config.json"
     if not os.path.exists(config_path):
@@ -138,6 +157,7 @@ def load_config(path: str = None) -> Config:
         tg_bot=tg_bot,
         db=db_config,
         redis=redis_config,
+        logging=logging_config,
         start_date=start_date,
         events=events
     )

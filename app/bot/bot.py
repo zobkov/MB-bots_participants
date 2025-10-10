@@ -105,6 +105,8 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Эта часть выполняется только если файл запускается напрямую
+    # В обычном случае бот запускается через main.py с настроенным логированием
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
