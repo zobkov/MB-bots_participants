@@ -16,7 +16,7 @@ main_menu_dialog = Dialog(
                 on_click=go_to_timetable
             ),
             Button(
-                Const("Регистрация на сессии"),
+                Const("Регистрация на дебаты"),
                 id="registration",
                 on_click=go_to_registration
             ),

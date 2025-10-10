@@ -10,9 +10,51 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 
+from aiogram import Router
+from aiogram.filters import Command, CommandStart
+from aiogram.types import Message
+from aiogram_dialog import DialogManager, StartMode
+import logging
+
+from app.bot.states.start import StartSG
+from app.infrastructure.database import DatabaseManager
+
+router = Router()
+logger = logging.getLogger(__name__)
+
+
 @router.message(CommandStart())
 async def start_command(message: Message, dialog_manager: DialogManager):
     """Обработчик команды /start"""
+    # Получаем менеджер базы данных из middleware
+    db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+    
+    user = message.from_user
+    user_id = user.id
+    username = user.username
+    
+    # Определяем видимое имя пользователя
+    if user.first_name and user.last_name:
+        visible_name = f"{user.first_name} {user.last_name}"
+    elif user.first_name:
+        visible_name = user.first_name
+    elif user.last_name:
+        visible_name = user.last_name
+    elif username:
+        visible_name = f"@{username}"
+    else:
+        visible_name = f"User {user_id}"
+    
+    # Проверяем, существует ли пользователь в базе
+    existing_user = await db_manager.get_user(user_id)
+    
+    if not existing_user:
+        # Создаем нового пользователя
+        await db_manager.create_user(user_id, username, visible_name)
+        logger.info(f"Created new user: {user_id} ({visible_name})")
+    else:
+        logger.info(f"Existing user started bot: {user_id} ({visible_name})")
+    
     await dialog_manager.start(StartSG.welcome, mode=StartMode.RESET_STACK)
 
 
@@ -26,6 +68,11 @@ async def menu_command(message: Message, dialog_manager: DialogManager):
 @router.message(Command("help"))
 async def help_command(message: Message):
     """Обработчик команды /help"""
+    from config.config import load_config
+    config = load_config()
+    
+    is_admin = message.from_user.id in config.logging.admin_ids
+    
     help_text = (
         "🤖 <b>Бот конференции Менеджмент Будущего 2025</b>\n\n"
         "Доступные команды:\n"
@@ -34,10 +81,25 @@ async def help_command(message: Message):
         "/help - Показать это сообщение\n\n"
         "Функции бота:\n"
         "📅 Расписание мероприятий\n"
-        "📝 Регистрация на сессии\n"
+        "📝 Регистрация на дебаты\n"
         "🗺 Навигация по площадке\n"
         "❓ Часто задаваемые вопросы\n"
     )
+    
+    if is_admin:
+        help_text += (
+            "\n<b>🔧 Административные команды:</b>\n"
+            "/debate_stats - Статистика регистрации на дебаты\n"
+            "/detailed_stats - Детальная статистика с именами\n"
+            "/reset_user_registration <user_id> - Сбросить регистрацию пользователя\n"
+            "/sync_debate_cache - Синхронизировать кеш с БД\n\n"
+            "<b>🧪 Команды для тестирования:</b>\n"
+            "/test_error - Тестовая ошибка\n"
+            "/test_warning - Тестовые предупреждения\n"
+            "/test_critical - Тестовая критическая ошибка\n"
+            "/test_exception - Тестовое исключение\n"
+        )
+    
     await message.answer(help_text, parse_mode="HTML")
 
 
@@ -103,3 +165,236 @@ async def test_exception_command(message: Message):
     await message.answer("🧪 Генерирую исключение для тестирования...")
     # Это исключение будет поймано middleware и отправлено админам
     raise RuntimeError(f"Тестовое исключение от админа {message.from_user.id}")
+
+
+@router.message(Command("debate_stats"))
+async def debate_stats_command(message: Message, dialog_manager: DialogManager):
+    """Команда для просмотра статистики регистрации на дебаты"""
+    # Проверяем права доступа (только для админов)
+    from config.config import load_config
+    config = load_config()
+    
+    if message.from_user.id not in config.logging.admin_ids:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+    
+    # Получаем менеджеры из middleware
+    db_manager = dialog_manager.middleware_data["db_manager"]
+    redis_manager = dialog_manager.middleware_data["redis_manager"]
+    
+    try:
+        # Получаем статистику
+        db_counts = await db_manager.get_debate_registrations_count()
+        remaining = await redis_manager.get_remaining_slots()
+        
+        # Формируем ответ
+        stats_text = "<b>📊 Статистика регистрации на дебаты</b>\n\n"
+        
+        case_names = {
+            1: "ВТБ",
+            2: "Алабуга", 
+            3: "Б1",
+            4: "Северсталь",
+            5: "Альфа"
+        }
+        
+        for case_num in range(1, 6):
+            name = case_names[case_num]
+            registered = db_counts[case_num]
+            remaining_count = remaining[case_num]
+            
+            stats_text += f"<b>{name}:</b> {registered} зарегистрировано, {remaining_count} свободно\n"
+        
+        # Общие лимиты
+        stats_text += "\n<b>Общие лимиты:</b>\n"
+        stats_text += f"ВТБ: {db_counts[1]}/32\n"
+        stats_text += f"Алабуга + Б1: {db_counts[2] + db_counts[3]}/41\n"
+        stats_text += f"Северсталь + Альфа: {db_counts[4] + db_counts[5]}/42\n"
+        
+        # Общая статистика
+        total_registered = sum(db_counts.values())
+        stats_text += f"\n<b>Всего зарегистрировано:</b> {total_registered}"
+        
+        await message.answer(stats_text, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Error getting debate stats: {e}")
+        await message.answer("❌ Ошибка при получении статистики")
+
+
+@router.message(Command("reset_user_registration"))
+async def reset_user_registration_command(message: Message, dialog_manager: DialogManager):
+    """Команда для сброса регистрации конкретного пользователя"""
+    # Проверяем права доступа (только для админов)
+    from config.config import load_config
+    config = load_config()
+    
+    if message.from_user.id not in config.logging.admin_ids:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+    
+    # Получаем user_id из команды
+    command_parts = message.text.split()
+    if len(command_parts) != 2:
+        await message.answer(
+            "Использование: /reset_user_registration <user_id>\n"
+            "Пример: /reset_user_registration 123456789"
+        )
+        return
+    
+    try:
+        target_user_id = int(command_parts[1])
+    except ValueError:
+        await message.answer("❌ Неверный формат user_id")
+        return
+    
+    # Получаем менеджеры из middleware
+    db_manager = dialog_manager.middleware_data["db_manager"]
+    redis_manager = dialog_manager.middleware_data["redis_manager"]
+    
+    try:
+        # Проверяем, есть ли пользователь и его регистрация
+        user = await db_manager.get_user(target_user_id)
+        if not user:
+            await message.answer(f"❌ Пользователь {target_user_id} не найден")
+            return
+        
+        if not user.debate_reg:
+            await message.answer(f"ℹ️ Пользователь {target_user_id} не зарегистрирован на дебаты")
+            return
+        
+        old_case = user.debate_reg
+        case_name = await redis_manager.get_case_name(old_case)
+        
+        # Сбрасываем регистрацию в БД
+        await db_manager.update_user_debate_registration(target_user_id, None)
+        
+        # Синхронизируем Redis с БД
+        db_counts = await db_manager.get_debate_registrations_count()
+        await redis_manager.sync_with_database(db_counts)
+        
+        await message.answer(
+            f"✅ Регистрация пользователя {target_user_id} на кейс {case_name} сброшена",
+            parse_mode="HTML"
+        )
+        
+        logger.info(f"Admin {message.from_user.id} reset registration for user {target_user_id} from case {old_case}")
+        
+    except Exception as e:
+        logger.error(f"Error resetting user registration: {e}")
+        await message.answer("❌ Ошибка при сбросе регистрации")
+
+
+@router.message(Command("sync_debate_cache"))
+async def sync_debate_cache_command(message: Message, dialog_manager: DialogManager):
+    """Команда для принудительной синхронизации Redis кеша с БД"""
+    # Проверяем права доступа (только для админов)
+    from config.config import load_config
+    config = load_config()
+    
+    if message.from_user.id not in config.logging.admin_ids:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+    
+    # Получаем менеджеры из middleware
+    db_manager = dialog_manager.middleware_data["db_manager"]
+    redis_manager = dialog_manager.middleware_data["redis_manager"]
+    
+    try:
+        # Синхронизируем Redis с БД
+        db_counts = await db_manager.get_debate_registrations_count()
+        await redis_manager.sync_with_database(db_counts)
+        
+        await message.answer(
+            f"✅ Кеш синхронизирован с базой данных\n"
+            f"Текущие данные: {db_counts}",
+            parse_mode="HTML"
+        )
+        
+        logger.info(f"Admin {message.from_user.id} manually synced debate cache")
+        
+    except Exception as e:
+        logger.error(f"Error syncing debate cache: {e}")
+        await message.answer("❌ Ошибка при синхронизации кеша")
+
+
+@router.message(Command("detailed_stats"))
+async def detailed_stats_command(message: Message, dialog_manager: DialogManager):
+    """Команда для получения детальной статистики"""
+    # Проверяем права доступа (только для админов)
+    from config.config import load_config
+    config = load_config()
+    
+    if message.from_user.id not in config.logging.admin_ids:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+    
+    # Получаем менеджеры из middleware
+    db_manager = dialog_manager.middleware_data["db_manager"]
+    redis_manager = dialog_manager.middleware_data["redis_manager"]
+    
+    try:
+        # Получаем общую статистику
+        total_users = await db_manager.get_total_users_count()
+        registered_users = await db_manager.get_registered_users_count()
+        db_counts = await db_manager.get_debate_registrations_count()
+        
+        # Формируем детальный ответ
+        stats_text = "<b>📊 ДЕТАЛЬНАЯ СТАТИСТИКА</b>\n\n"
+        
+        # Общие цифры
+        stats_text += f"<b>👥 Общие данные:</b>\n"
+        stats_text += f"Всего пользователей: {total_users}\n"
+        stats_text += f"Зарегистрированных на дебаты: {registered_users}\n"
+        stats_text += f"Не зарегистрированных: {total_users - registered_users}\n\n"
+        
+        # По кейсам
+        case_names = {
+            1: "ВТБ",
+            2: "Алабуга", 
+            3: "Б1",
+            4: "Северсталь",
+            5: "Альфа"
+        }
+        
+        stats_text += "<b>🎯 Регистрация по кейсам:</b>\n"
+        for case_num in range(1, 6):
+            name = case_names[case_num]
+            count = db_counts[case_num]
+            
+            # Получаем список пользователей для этого кейса
+            users_in_case = await db_manager.get_users_by_debate_case(case_num)
+            
+            stats_text += f"<b>{name}:</b> {count} чел.\n"
+            
+            if users_in_case:
+                # Показываем первых 3 пользователей
+                user_list = []
+                for i, user in enumerate(users_in_case[:3]):
+                    display_name = user.visible_name or f"User {user.id}"
+                    user_list.append(f"  • {display_name}")
+                
+                stats_text += "\n".join(user_list)
+                
+                if len(users_in_case) > 3:
+                    stats_text += f"\n  • ... и еще {len(users_in_case) - 3}"
+                
+                stats_text += "\n"
+            
+            stats_text += "\n"
+        
+        # Лимиты
+        stats_text += "<b>📊 Использование лимитов:</b>\n"
+        vtb_used = (db_counts[1] / 32) * 100
+        alabuga_b1_used = ((db_counts[2] + db_counts[3]) / 41) * 100
+        severstal_alpha_used = ((db_counts[4] + db_counts[5]) / 42) * 100
+        
+        stats_text += f"ВТБ: {db_counts[1]}/32 ({vtb_used:.1f}%)\n"
+        stats_text += f"Алабуга+Б1: {db_counts[2] + db_counts[3]}/41 ({alabuga_b1_used:.1f}%)\n"
+        stats_text += f"Северсталь+Альфа: {db_counts[4] + db_counts[5]}/42 ({severstal_alpha_used:.1f}%)\n"
+        
+        await message.answer(stats_text, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Error getting detailed stats: {e}")
+        await message.answer("❌ Ошибка при получении детальной статистики")

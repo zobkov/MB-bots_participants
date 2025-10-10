@@ -12,6 +12,7 @@ from app.bot.handlers.commands import router as commands_router
 from app.bot.middlewares.error_handler import ErrorHandlerMiddleware
 from app.bot.middlewares.config import ConfigMiddleware
 from app.bot.middlewares.logging_context import LoggingContextMiddleware
+from app.infrastructure.database import DatabaseManager, RedisManager
 
 # Импорт всех диалогов
 from app.bot.dialogs.start import start_dialog
@@ -50,6 +51,37 @@ async def setup_redis_storage(config) -> RedisStorage:
     return storage
 
 
+async def setup_database_and_redis(config) -> tuple[DatabaseManager, RedisManager]:
+    """Настройка базы данных и Redis для кеширования"""
+    # Инициализация DatabaseManager
+    db_manager = DatabaseManager(config.db)
+    await db_manager.init()
+    
+    # Инициализация RedisManager 
+    redis_manager = RedisManager(config.redis)
+    await redis_manager.init()
+    
+    # Синхронизация Redis с базой данных
+    db_counts = await db_manager.get_debate_registrations_count()
+    await redis_manager.sync_with_database(db_counts)
+    
+    logger.info("Database and Redis initialized and synced")
+    return db_manager, redis_manager
+
+
+class DatabaseMiddleware:
+    """Middleware для добавления менеджеров базы данных и Redis в контекст"""
+    
+    def __init__(self, db_manager: DatabaseManager, redis_manager: RedisManager):
+        self.db_manager = db_manager
+        self.redis_manager = redis_manager
+    
+    async def __call__(self, handler, event, data):
+        data["db_manager"] = self.db_manager
+        data["redis_manager"] = self.redis_manager
+        return await handler(event, data)
+
+
 async def main():
     """Основная функция запуска бота"""
     logger.info("Loading configuration...")
@@ -66,6 +98,9 @@ async def main():
     # Настройка Redis storage
     storage = await setup_redis_storage(config)
     
+    # Настройка базы данных и Redis
+    db_manager, redis_manager = await setup_database_and_redis(config)
+    
     # Создание диспетчера
     dp = Dispatcher(storage=storage)
     
@@ -76,6 +111,7 @@ async def main():
     # Подключение middleware
     dp.update.middleware(LoggingContextMiddleware())  # Добавляем первым для контекста логов
     dp.update.middleware(ConfigMiddleware(config))
+    dp.update.middleware(DatabaseMiddleware(db_manager, redis_manager))  # Добавляем DB middleware
     dp.update.middleware(ErrorHandlerMiddleware())
     
     # Запуск воркера уведомлений для админов
@@ -117,6 +153,10 @@ async def main():
                 await log_worker_task
             except asyncio.CancelledError:
                 pass
+        
+        # Закрываем подключения к базе данных и Redis
+        await db_manager.close()
+        await redis_manager.close()
         
         await bot.session.close()
         if storage.redis:
