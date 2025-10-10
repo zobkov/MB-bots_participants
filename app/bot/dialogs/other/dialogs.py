@@ -1,32 +1,12 @@
-from aiogram_dialog import Dialog, Window, DialogManager
-from aiogram_dialog.widgets.kbd import Cancel
-from aiogram_dialog.widgets.text import Const
+# This file is deprecated. 
+# Dialogs have been moved to separate directories:
+# - navigation_dialog -> app.bot.dialogs.navigation
+# - faq_dialog -> app.bot.dialogs.faq  
+# - registration_dialog -> app.bot.dialogs.registration
 
-from app.bot.states.other import NavigationSG, FaqSG, RegistrationSG
+# Import from new locations for backward compatibility
+from app.bot.dialogs.navigation import navigation_dialog
+from app.bot.dialogs.faq import faq_dialog
+from app.bot.dialogs.registration import registration_dialog
 
-
-navigation_dialog = Dialog(
-    Window(
-        Const("Навигация по площадке\n\nРаздел находится в разработке."),
-        Cancel(Const("Назад"), id="navigation_back"),
-        state=NavigationSG.main,
-    ),
-)
-
-
-faq_dialog = Dialog(
-    Window(
-        Const("Часто задаваемые вопросы\n\nРаздел находится в разработке."),
-        Cancel(Const("Назад"), id="faq_back"),
-        state=FaqSG.main,
-    ),
-)
-
-
-registration_dialog = Dialog(
-    Window(
-        Const("Регистрация на сессии\n\nРаздел находится в разработке."),
-        Cancel(Const("Назад"), id="registration_back"),
-        state=RegistrationSG.main,
-    ),
-)
+__all__ = ["navigation_dialog", "faq_dialog", "registration_dialog"]

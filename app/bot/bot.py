@@ -16,7 +16,9 @@ from app.bot.middlewares.config import ConfigMiddleware
 from app.bot.dialogs.start.dialog import start_dialog
 from app.bot.dialogs.main_menu.dialog import main_menu_dialog
 from app.bot.dialogs.timetable.dialog import timetable_dialog
-from app.bot.dialogs.other.dialogs import navigation_dialog, faq_dialog, registration_dialog
+from app.bot.dialogs.navigation import navigation_dialog
+from app.bot.dialogs.faq import faq_dialog
+from app.bot.dialogs.registration import registration_dialog
 
 logger = logging.getLogger(__name__)
 
