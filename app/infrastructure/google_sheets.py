@@ -1,0 +1,201 @@
+"""Google Sheets manager for syncing debate registration data"""
+
+import logging
+import json
+import os
+from typing import List, Dict, Optional
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+logger = logging.getLogger(__name__)
+
+
+class GoogleSheetsManager:
+    """Manages synchronization with Google Sheets"""
+    
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+    
+    def __init__(self, credentials_path: str, spreadsheet_id: str):
+        self.credentials_path = credentials_path
+        self.spreadsheet_id = spreadsheet_id
+        self.service = None
+        
+    async def init(self):
+        """Initialize Google Sheets service"""
+        try:
+            if not os.path.exists(self.credentials_path):
+                raise FileNotFoundError(f"Google credentials file not found: {self.credentials_path}")
+            
+            # Load credentials
+            credentials = Credentials.from_service_account_file(
+                self.credentials_path, 
+                scopes=self.SCOPES
+            )
+            
+            # Build service
+            self.service = build('sheets', 'v4', credentials=credentials)
+            
+            logger.info("Google Sheets service initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize Google Sheets service: {e}")
+            raise
+    
+    async def sync_debate_data(self, users_data: List[Dict], db_counts: Dict[int, int]) -> bool:
+        """
+        Sync debate registration data to Google Sheets
+        
+        Args:
+            users_data: List of user dictionaries with registration info
+            db_counts: Current registration counts by case
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            if not self.service:
+                await self.init()
+            
+            # Prepare data for the sheet
+            sheet_data = self._prepare_sheet_data(users_data, db_counts)
+            
+            # Clear and update the MAIN sheet
+            await self._clear_sheet("MAIN")
+            await self._write_to_sheet("MAIN", sheet_data)
+            
+            logger.info(f"Successfully synced {len(users_data)} user records to Google Sheets")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to sync data to Google Sheets: {e}")
+            return False
+    
+    def _prepare_sheet_data(self, users_data: List[Dict], db_counts: Dict[int, int]) -> List[List]:
+        """Prepare data in format suitable for Google Sheets"""
+        
+        # Header row
+        headers = [
+            "ID пользователя",
+            "Username", 
+            "Видимое имя",
+            "Кейс регистрации",
+            "Название кейса",
+            "Дата обновления"
+        ]
+        
+        # Data rows
+        data_rows = []
+        
+        case_names = {
+            1: "ВТБ",
+            2: "Алабуга",
+            3: "Б1", 
+            4: "Северсталь",
+            5: "Альфа"
+        }
+        
+        # Add user data
+        for user in users_data:
+            row = [
+                str(user['id']),
+                f"@{user['username']}" if user['username'] else "—",
+                user['visible_name'] or f"User {user['id']}",
+                str(user['debate_reg']) if user['debate_reg'] else "Не зарегистрирован",
+                case_names.get(user['debate_reg'], "—") if user['debate_reg'] else "—",
+                user.get('updated_at', "—")
+            ]
+            data_rows.append(row)
+        
+        # Combine headers and data (without statistics)
+        return [headers] + data_rows
+    
+    async def _clear_sheet(self, sheet_name: str):
+        """Clear all data from a sheet"""
+        try:
+            # Get sheet properties to determine range
+            sheet_metadata = self.service.spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id
+            ).execute()
+            
+            # Find the sheet
+            sheet_id = None
+            for sheet in sheet_metadata.get('sheets', []):
+                if sheet['properties']['title'] == sheet_name:
+                    sheet_id = sheet['properties']['sheetId']
+                    break
+            
+            if sheet_id is None:
+                # Create the sheet if it doesn't exist
+                request_body = {
+                    'requests': [{
+                        'addSheet': {
+                            'properties': {
+                                'title': sheet_name
+                            }
+                        }
+                    }]
+                }
+                
+                self.service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.spreadsheet_id,
+                    body=request_body
+                ).execute()
+                
+                logger.info(f"Created new sheet: {sheet_name}")
+            else:
+                # Clear existing data
+                range_name = f"{sheet_name}!A:Z"
+                self.service.spreadsheets().values().clear(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=range_name
+                ).execute()
+                
+                logger.info(f"Cleared sheet: {sheet_name}")
+                
+        except HttpError as e:
+            logger.error(f"Error clearing sheet {sheet_name}: {e}")
+            raise
+    
+    async def _write_to_sheet(self, sheet_name: str, data: List[List]):
+        """Write data to a sheet"""
+        try:
+            range_name = f"{sheet_name}!A1"
+            
+            body = {
+                'values': data,
+                'majorDimension': 'ROWS'
+            }
+            
+            result = self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=range_name,
+                valueInputOption='USER_ENTERED',
+                body=body
+            ).execute()
+            
+            updated_cells = result.get('updatedCells', 0)
+            logger.info(f"Updated {updated_cells} cells in sheet {sheet_name}")
+            
+        except HttpError as e:
+            logger.error(f"Error writing to sheet {sheet_name}: {e}")
+            raise
+    
+    async def test_connection(self) -> bool:
+        """Test connection to Google Sheets"""
+        try:
+            if not self.service:
+                await self.init()
+            
+            # Try to get spreadsheet metadata
+            result = self.service.spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id
+            ).execute()
+            
+            title = result.get('properties', {}).get('title', 'Unknown')
+            logger.info(f"Successfully connected to Google Sheets: '{title}'")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to connect to Google Sheets: {e}")
+            return False

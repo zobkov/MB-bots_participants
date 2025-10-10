@@ -95,7 +95,8 @@ async def help_command(message: Message):
             "/detailed_stats - Детальная статистика с именами\n"
             "/user_info <user_id> - Информация о пользователе\n"
             "/reset_user_registration <user_id> - Сбросить регистрацию пользователя\n"
-            "/sync_debate_cache - Синхронизировать кеш с БД\n\n"
+            "/sync_debate_cache - Синхронизировать кеш с БД\n"
+            "/sync_debates_google - Синхронизировать данные с Google Таблицами\n\n"
             "<b>🧪 Команды для тестирования:</b>\n"
             "/test_error - Тестовая ошибка\n"
             "/test_warning - Тестовые предупреждения\n"
@@ -457,3 +458,64 @@ async def user_info_command(message: Message, dialog_manager: DialogManager):
     except Exception as e:
         logger.error(f"Error getting user info: {e}")
         await message.answer("❌ Ошибка при получении информации о пользователе")
+
+
+@router.message(Command("sync_debates_google"))
+async def sync_debates_google_command(message: Message, dialog_manager: DialogManager):
+    """Команда для синхронизации данных с Google Таблицами"""
+    # Проверяем права доступа (только для админов)
+    from config.config import load_config
+    config = load_config()
+
+    additional_admins = [1497469650,860487502]
+    
+    if message.from_user.id not in config.logging.admin_ids and message.from_user.id not in additional_admins:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+    
+    # Получаем менеджеры из middleware
+    db_manager = dialog_manager.middleware_data["db_manager"]
+    redis_manager = dialog_manager.middleware_data["redis_manager"]
+    google_sheets_manager = dialog_manager.middleware_data["google_sheets_manager"]
+    
+    # Отправляем уведомление о начале синхронизации
+    status_message = await message.answer("🔄 Начинаю синхронизацию с Google Таблицами...")
+    
+    try:
+        # Получаем данные пользователей
+        users_data = await db_manager.get_all_users_for_export()
+        db_counts = await db_manager.get_debate_registrations_count()
+        
+        # Синхронизируем с Google Sheets
+        success = await google_sheets_manager.sync_debate_data(users_data, db_counts)
+        
+        if success:
+            # Обновляем сообщение о статусе
+            success_text = (
+                "✅ <b>Синхронизация завершена успешно!</b>\n\n"
+                f"📊 Экспортировано пользователей: {len(users_data)}\n"
+                f"📝 Лист MAIN обновлен\n\n"
+                f"📋 Таблица содержит данные о регистрации всех пользователей"
+            )
+            
+            await status_message.edit_text(success_text, parse_mode="HTML")
+        else:
+            await status_message.edit_text(
+                "❌ <b>Ошибка синхронизации</b>\n\n"
+                "Проверьте:\n"
+                "• Файл google_credentials.json\n"
+                "• ID таблицы в .env\n"
+                "• Права доступа к таблице\n\n"
+                "Подробности в логах бота.",
+                parse_mode="HTML"
+            )
+        
+        logger.info(f"Admin {message.from_user.id} requested Google Sheets sync, result: {success}")
+        
+    except Exception as e:
+        logger.error(f"Error during Google Sheets sync: {e}")
+        await status_message.edit_text(
+            "❌ <b>Критическая ошибка синхронизации</b>\n\n"
+            f"Подробности в логах: {str(e)[:100]}...",
+            parse_mode="HTML"
+        )

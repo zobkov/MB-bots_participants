@@ -137,3 +137,24 @@ class DatabaseManager:
                 .where(User.debate_reg.isnot(None))
             )
             return result.scalar()
+    
+    async def get_all_users_for_export(self) -> List[Dict[str, Any]]:
+        """Get all users data for export to Google Sheets"""
+        async with self.sessionmaker() as session:
+            result = await session.execute(
+                select(User).order_by(User.id)
+            )
+            users = result.scalars().all()
+            
+            # Convert to dictionaries for easier processing
+            users_data = []
+            for user in users:
+                users_data.append({
+                    'id': user.id,
+                    'username': user.username,
+                    'visible_name': user.visible_name,
+                    'debate_reg': user.debate_reg,
+                    'updated_at': "—"  # We can add timestamps later if needed
+                })
+            
+            return users_data

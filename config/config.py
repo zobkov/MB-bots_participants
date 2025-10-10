@@ -41,6 +41,12 @@ class LoggingConfig:
 
 
 @dataclass
+class GoogleSheetsConfig:
+    credentials_path: str
+    spreadsheet_id: str
+
+
+@dataclass
 class Event:
     title: str
     description: str
@@ -65,6 +71,7 @@ class Config:
     db: DatabaseConfig
     redis: RedisConfig
     logging: LoggingConfig
+    google_sheets: GoogleSheetsConfig
     start_date: datetime
     events: List[Event]
 
@@ -130,6 +137,12 @@ def load_config(path: str = None) -> Config:
         admin_ids=[int(x.strip()) for x in env.str("ADMIN_IDS", "").split(",") if x.strip()]
     )
 
+    # Конфигурация Google Sheets
+    google_sheets_config = GoogleSheetsConfig(
+        credentials_path=env.str("GOOGLE_CREDENTIALS_PATH", "config/google_credentials.json"),
+        spreadsheet_id=env.str("GOOGLE_SPREADSHEET_ID")
+    )
+
     # Загрузка конфигурации из JSON
     config_path = "config.json"
     if not os.path.exists(config_path):
@@ -160,6 +173,7 @@ def load_config(path: str = None) -> Config:
         db=db_config,
         redis=redis_config,
         logging=logging_config,
+        google_sheets=google_sheets_config,
         start_date=start_date,
         events=events
     )

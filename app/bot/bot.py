@@ -13,6 +13,7 @@ from app.bot.middlewares.error_handler import ErrorHandlerMiddleware
 from app.bot.middlewares.config import ConfigMiddleware
 from app.bot.middlewares.logging_context import LoggingContextMiddleware
 from app.infrastructure.database import DatabaseManager, RedisManager
+from app.infrastructure.google_sheets import GoogleSheetsManager
 
 # Импорт всех диалогов
 from app.bot.dialogs.start import start_dialog
@@ -51,8 +52,8 @@ async def setup_redis_storage(config) -> RedisStorage:
     return storage
 
 
-async def setup_database_and_redis(config) -> tuple[DatabaseManager, RedisManager]:
-    """Настройка базы данных и Redis для кеширования"""
+async def setup_database_and_redis(config) -> tuple[DatabaseManager, RedisManager, GoogleSheetsManager]:
+    """Настройка базы данных, Redis для кеширования и Google Sheets"""
     # Инициализация DatabaseManager
     db_manager = DatabaseManager(config.db)
     await db_manager.init()
@@ -61,24 +62,39 @@ async def setup_database_and_redis(config) -> tuple[DatabaseManager, RedisManage
     redis_manager = RedisManager(config.redis)
     await redis_manager.init()
     
+    # Инициализация GoogleSheetsManager
+    google_sheets_manager = GoogleSheetsManager(
+        config.google_sheets.credentials_path,
+        config.google_sheets.spreadsheet_id
+    )
+    
+    # Проверяем подключение к Google Sheets (опционально)
+    try:
+        await google_sheets_manager.init()
+        logger.info("Google Sheets manager initialized successfully")
+    except Exception as e:
+        logger.warning(f"Google Sheets initialization failed (will retry on sync): {e}")
+    
     # Синхронизация Redis с базой данных
     db_counts = await db_manager.get_debate_registrations_count()
     await redis_manager.sync_with_database(db_counts)
     
     logger.info("Database and Redis initialized and synced")
-    return db_manager, redis_manager
+    return db_manager, redis_manager, google_sheets_manager
 
 
 class DatabaseMiddleware:
-    """Middleware для добавления менеджеров базы данных и Redis в контекст"""
+    """Middleware для добавления менеджеров базы данных, Redis и Google Sheets в контекст"""
     
-    def __init__(self, db_manager: DatabaseManager, redis_manager: RedisManager):
+    def __init__(self, db_manager: DatabaseManager, redis_manager: RedisManager, google_sheets_manager: GoogleSheetsManager):
         self.db_manager = db_manager
         self.redis_manager = redis_manager
+        self.google_sheets_manager = google_sheets_manager
     
     async def __call__(self, handler, event, data):
         data["db_manager"] = self.db_manager
         data["redis_manager"] = self.redis_manager
+        data["google_sheets_manager"] = self.google_sheets_manager
         return await handler(event, data)
 
 
@@ -98,8 +114,8 @@ async def main():
     # Настройка Redis storage
     storage = await setup_redis_storage(config)
     
-    # Настройка базы данных и Redis
-    db_manager, redis_manager = await setup_database_and_redis(config)
+    # Настройка базы данных, Redis и Google Sheets
+    db_manager, redis_manager, google_sheets_manager = await setup_database_and_redis(config)
     
     # Создание диспетчера
     dp = Dispatcher(storage=storage)
@@ -111,7 +127,7 @@ async def main():
     # Подключение middleware
     dp.update.middleware(LoggingContextMiddleware())  # Добавляем первым для контекста логов
     dp.update.middleware(ConfigMiddleware(config))
-    dp.update.middleware(DatabaseMiddleware(db_manager, redis_manager))  # Добавляем DB middleware
+    dp.update.middleware(DatabaseMiddleware(db_manager, redis_manager, google_sheets_manager))  # Добавляем DB middleware
     dp.update.middleware(ErrorHandlerMiddleware())
     
     # Запуск воркера уведомлений для админов
