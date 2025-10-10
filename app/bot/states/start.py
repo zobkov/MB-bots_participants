@@ -1,5 +1,5 @@
-from aiogram.fsm.state import State, StatesGroup
+# Import states from individual dialog modules
+from app.bot.dialogs.start.states import StartSG
 
-
-class StartSG(StatesGroup):
-    welcome = State()
+# Re-export for backward compatibility
+__all__ = ["StartSG"]

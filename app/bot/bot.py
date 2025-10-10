@@ -13,9 +13,9 @@ from app.bot.middlewares.error_handler import ErrorHandlerMiddleware
 from app.bot.middlewares.config import ConfigMiddleware
 
 # Импорт всех диалогов
-from app.bot.dialogs.start.dialog import start_dialog
-from app.bot.dialogs.main_menu.dialog import main_menu_dialog
-from app.bot.dialogs.timetable.dialog import timetable_dialog
+from app.bot.dialogs.start import start_dialog
+from app.bot.dialogs.main_menu import main_menu_dialog
+from app.bot.dialogs.timetable import timetable_dialog
 from app.bot.dialogs.navigation import navigation_dialog
 from app.bot.dialogs.faq import faq_dialog
 from app.bot.dialogs.registration import registration_dialog

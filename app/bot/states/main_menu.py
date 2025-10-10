@@ -1,5 +1,5 @@
-from aiogram.fsm.state import State, StatesGroup
+# Import states from individual dialog modules
+from app.bot.dialogs.main_menu.states import MainMenuSG
 
-
-class MainMenuSG(StatesGroup):
-    main_menu = State()
+# Re-export for backward compatibility
+__all__ = ["MainMenuSG"]

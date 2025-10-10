@@ -1,7 +1,5 @@
-from aiogram.fsm.state import State, StatesGroup
+# Import states from individual dialog modules
+from app.bot.dialogs.timetable.states import TimetableSG
 
-
-class TimetableSG(StatesGroup):
-    days_list = State()
-    day_events = State()
-    event_detail = State()
+# Re-export for backward compatibility
+__all__ = ["TimetableSG"]

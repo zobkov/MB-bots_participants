@@ -1,14 +1,9 @@
-from aiogram_dialog import Dialog, Window, DialogManager, StartMode
+from aiogram_dialog import Dialog, Window
 from aiogram_dialog.widgets.kbd import Button
 from aiogram_dialog.widgets.text import Const
 
-from app.bot.states.start import StartSG
-from app.bot.states.main_menu import MainMenuSG
-
-
-async def go_to_main_menu(callback, widget, manager: DialogManager):
-    """Переход в главное меню"""
-    await manager.start(MainMenuSG.main_menu, mode=StartMode.RESET_STACK)
+from .states import StartSG
+from .handlers import go_to_main_menu
 
 
 start_dialog = Dialog(
