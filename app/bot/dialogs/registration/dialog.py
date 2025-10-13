@@ -16,26 +16,16 @@ registration_dialog = Dialog(
                 id="case_1",
                 on_click=on_case_selected,
             ),
+        ),
+        Row(
             Button(
                 Format("{alabuga_button_text}"),
                 id="case_2", 
                 on_click=on_case_selected,
             ),
             Button(
-                Format("{b1_button_text}"),
-                id="case_3",
-                on_click=on_case_selected,
-            ),
-        ),
-        Row(
-            Button(
                 Format("{severstal_button_text}"),
                 id="case_4",
-                on_click=on_case_selected,
-            ),
-            Button(
-                Format("{alpha_button_text}"),
-                id="case_5",
                 on_click=on_case_selected,
             ),
         ),

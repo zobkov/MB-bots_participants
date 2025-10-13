@@ -107,9 +107,9 @@ class RedisManager:
         """Get human-readable case name"""
         names = {
             1: "ВТБ",
-            2: "Алабуга", 
-            3: "Б1",
-            4: "Северсталь",
+            2: "Алабуга и Б1", 
+            3: "",
+            4: "Северсталь и Альфа",
             5: "Альфа"
         }
         return names.get(case_number, "Unknown")

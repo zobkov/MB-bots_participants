@@ -20,24 +20,22 @@ async def get_debate_registration_data(dialog_manager: DialogManager, **kwargs) 
     # Get case names
     case_names = {
         1: "ВТБ",
-        2: "Алабуга", 
-        3: "Б1",
-        4: "Северсталь",
-        5: "Альфа"
+        2: "Алабуга и Б1", 
+        4: "Северсталь и Альфа"
     }
     
     # Format text for each case
     cases_text = []
-    for case_num in range(1, 6):
+    for case_num in (1,2,4):
         name = case_names[case_num]
         remaining_count = remaining[case_num]
-        cases_text.append(f"— Кейс {name}\n<i>Осталось мест: {remaining_count}</i>")
+        cases_text.append(f"— <b>{name}</b>\n<i>Осталось мест: {remaining_count}</i>")
     
     # Format button texts with lock emoji for unavailable cases
     vtb_text = "ВТБ" if remaining[1] > 0 else "🔒 ВТБ"
-    alabuga_text = "Алабуга" if remaining[2] > 0 else "🔒 Алабуга"
+    alabuga_text = "Алабуга и Б1" if remaining[2] > 0 else "🔒 Алабуга и Б1"
     b1_text = "Б1" if remaining[3] > 0 else "🔒 Б1"
-    severstal_text = "Северсталь" if remaining[4] > 0 else "🔒 Северсталь"
+    severstal_text = "Северсталь и Альфа" if remaining[4] > 0 else "🔒 Северсталь и Альфа"
     alpha_text = "Альфа" if remaining[5] > 0 else "🔒 Альфа"
     
     # User status text
@@ -70,9 +68,9 @@ async def get_confirmation_data(dialog_manager: DialogManager, **kwargs) -> Dict
     
     case_names = {
         1: "ВТБ",
-        2: "Алабуга", 
+        2: "Алабуга и Б1", 
         3: "Б1", 
-        4: "Северсталь",
+        4: "Северсталь и Альфа",
         5: "Альфа"
     }
     
