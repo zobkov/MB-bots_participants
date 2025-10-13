@@ -38,10 +38,10 @@ echo "🔍 Verifying database schema..."
 python -c "
 import asyncio
 import asyncpg
-from config.config import get_config
+from config.config import load_config
 
 async def check_schema():
-    config = get_config()
+    config = load_config()
     import urllib.parse as urlparse
     url = urlparse.urlparse(config.database_url)
     
