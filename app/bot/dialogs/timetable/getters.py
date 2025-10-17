@@ -325,9 +325,9 @@ def _compose_schedule_text(
                     f"{selected_event['start_time']} – {selected_event['end_time']} · <b>{selected_event['title']}</b>{location}"
                 )
             else:
-                titles = " | ".join(event.get("title", "") for event in events)
+                titles = "\n• ".join(event.get("title", "") for event in events)
                 lines.append(
-                    f"{events[0]['start_time']} – {events[0]['end_time']} · <b>Параллельные мероприятия</b>: {titles}"
+                    f"{events[0]['start_time']} – {events[0]['end_time']} · <b>Параллельные мероприятия</b>: \n• {titles}"
                 )
         lines.append("")
 
