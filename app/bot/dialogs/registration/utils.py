@@ -1,2 +1,5 @@
-# Utility functions for registration dialog
-# Place your utility functions here
+"""Utility helpers for the registration dialog."""
+
+GENERIC_REGISTRATION_ERROR_MESSAGE = (
+	"Произошла ошибка. Попробуйте еще раз, или используйте /menu"
+)

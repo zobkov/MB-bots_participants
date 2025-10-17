@@ -1,13 +1,13 @@
 """Handlers for registration dialog"""
 
 import logging
-from typing import Any
 from aiogram.types import CallbackQuery
 from aiogram_dialog import DialogManager
 from aiogram_dialog.widgets.kbd import Button
 
 from app.infrastructure.database import DatabaseManager, RedisManager
 from .states import RegistrationSG
+from .utils import GENERIC_REGISTRATION_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ async def on_confirm_registration(callback: CallbackQuery, button: Button, dialo
         # Update database
         success = await db_manager.update_user_debate_registration(user_id, case_number)
         if not success:
-            await callback.answer("Ошибка при регистрации. Попробуйте позже.", show_alert=True)
+            await callback.answer(GENERIC_REGISTRATION_ERROR_MESSAGE, show_alert=True)
             return
         
         # Update Redis cache
@@ -132,7 +132,7 @@ async def on_confirm_registration(callback: CallbackQuery, button: Button, dialo
         
     except Exception as e:
         logger.error(f"Error registering user {user_id} for case {case_number}: {e}")
-        await callback.answer("Произошла ошибка при регистрации. Попробуйте позже.", show_alert=True)
+        await callback.answer(GENERIC_REGISTRATION_ERROR_MESSAGE, show_alert=True)
 
 
 async def on_cancel_registration(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
@@ -176,7 +176,7 @@ async def on_confirm_unregister(callback: CallbackQuery, button: Button, dialog_
         # Remove registration from database
         success = await db_manager.update_user_debate_registration(user_id, None)
         if not success:
-            await callback.answer("Ошибка при отмене регистрации. Попробуйте позже.", show_alert=True)
+            await callback.answer(GENERIC_REGISTRATION_ERROR_MESSAGE, show_alert=True)
             return
         
         # Sync Redis cache with database
@@ -223,7 +223,7 @@ async def on_confirm_unregister(callback: CallbackQuery, button: Button, dialog_
         
     except Exception as e:
         logger.error(f"Error unregistering user {user_id}: {e}")
-        await callback.answer("Произошла ошибка при отмене регистрации. Попробуйте позже.", show_alert=True)
+        await callback.answer(GENERIC_REGISTRATION_ERROR_MESSAGE, show_alert=True)
 
 
 async def on_cancel_unregister(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):

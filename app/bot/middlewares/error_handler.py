@@ -21,7 +21,7 @@ class ErrorHandlerMiddleware(BaseMiddleware):
             logger.exception(f"Error in handler: {e}")
             
             # Отправляем пользователю сообщение об ошибке
-            error_message = "Упс! Что-то пошло не так. Нажми /menu чтобы вернуться в главное меню"
+            error_message = "Произошла ошибка. Используй /menu для перезапуска.\n\nТех. поддержка: @zobko"
             
             try:
                 if isinstance(event, CallbackQuery):
