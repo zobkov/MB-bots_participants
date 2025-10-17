@@ -467,7 +467,7 @@ async def sync_debates_google_command(message: Message, dialog_manager: DialogMa
     from config.config import load_config
     config = load_config()
 
-    additional_admins = [1497469650,860487502]
+    additional_admins = [1497469650,860487502,474503734]
     
     if message.from_user.id not in config.logging.admin_ids and message.from_user.id not in additional_admins:
         await message.answer("❌ У вас нет прав для выполнения этой команды")
