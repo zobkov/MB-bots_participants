@@ -142,3 +142,21 @@ async def on_unregister_event(callback: CallbackQuery, widget, dialog_manager: D
     except Exception as exc:
         logger.exception("Failed to unregister user", exc_info=exc)
         await callback.answer("Ошибка при отмене регистрации", show_alert=True)
+
+
+async def on_back_to_day_events(callback: CallbackQuery, widget, dialog_manager: DialogManager):
+    """Return from event detail back to the appropriate window."""
+    selected_event_id = dialog_manager.dialog_data.get("selected_event_id")
+    event_map = dialog_manager.dialog_data.get("event_map", {})
+    event = event_map.get(selected_event_id)
+    group_id = dialog_manager.dialog_data.get("selected_group_id")
+
+    dialog_manager.dialog_data.pop("selected_event_id", None)
+
+    if group_id and event and event.get("registration_required"):
+        await dialog_manager.switch_to(TimetableSG.group_events)
+    else:
+        dialog_manager.dialog_data.pop("selected_group_id", None)
+        await dialog_manager.switch_to(TimetableSG.day_events)
+
+    await callback.answer()

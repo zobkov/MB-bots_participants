@@ -9,6 +9,7 @@ from .handlers import (
     on_group_event_selected,
     on_register_event,
     on_unregister_event,
+    on_back_to_day_events,
 )
 from .getters import (
     get_days_data,
@@ -90,7 +91,11 @@ timetable_dialog = Dialog(
                 when="show_unregister_button",
             ),
         ),
-        Back(Const("⬅️ Назад"), id="back_to_events"), # TODO сделать смену обратно в меню дня, а не в парлелльноые мероприятия как сейчас
+        Button(
+            Const("⬅️ Назад"),
+            id="back_to_day",
+            on_click=on_back_to_day_events,
+        ),
         state=TimetableSG.event_detail,
         getter=get_event_detail_data,
         parse_mode="HTML"

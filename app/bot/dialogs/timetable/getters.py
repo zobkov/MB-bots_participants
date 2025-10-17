@@ -44,6 +44,13 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
     """Provide schedule structure for selected day."""
     try:
         config: Config = kwargs["config"]
+        db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+        event_obj = dialog_manager.event
+        if event_obj and getattr(event_obj, "from_user", None):
+            user_id = event_obj.from_user.id
+        else:
+            user_id = dialog_manager.dialog_data.get("current_user_id")
+        dialog_manager.dialog_data["current_user_id"] = user_id
         selected_day = dialog_manager.dialog_data.get("selected_day", 0)
 
         day_events = config.get_day_events(selected_day)
@@ -54,6 +61,7 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
         event_to_group: Dict[str, Optional[str]] = {}
         group_capacities: Dict[str, Dict[str, int]] = {}
         group_map: Dict[str, List[Dict[str, Any]]] = {}
+        user_group_registrations: Dict[str, str] = {}
 
         for event_id, payload in serialized_events.items():
             group_id = payload["group_id"] if payload.get("registration_required") else None
@@ -62,11 +70,16 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
         for group_id, events in raw_group_map.items():
             group_capacities[group_id] = distribute_capacity(TOTAL_PARALLEL_CAPACITY, events)
             group_map[group_id] = [serialized_events[event.event_id] for event in events]
+            if user_id is not None:
+                registration = await db_manager.get_user_event_registration(user_id, group_id)
+                if registration:
+                    user_group_registrations[group_id] = registration.event_id
 
         dialog_manager.dialog_data["event_map"] = event_map
         dialog_manager.dialog_data["event_to_group"] = event_to_group
         dialog_manager.dialog_data["group_map"] = group_map
         dialog_manager.dialog_data["group_capacities"] = group_capacities
+        dialog_manager.dialog_data["user_group_registrations"] = user_group_registrations
 
         schedule_text = _compose_schedule_text(
             config.start_date,
@@ -74,6 +87,7 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
             schedule_items,
             event_map,
             group_map,
+            user_group_registrations,
         )
 
         events_payload = [
@@ -116,11 +130,21 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
         return {"group_header": "В выбранной группе нет мероприятий", "group_events": []}
 
     capacities = dialog_manager.dialog_data.get("group_capacities", {}).get(group_id, {})
+    user_group_registrations: Dict[str, str] = dialog_manager.dialog_data.get("user_group_registrations", {})
+    current_event_id = user_group_registrations.get(group_id)
 
     counts = await redis_manager.get_event_group_counts(group_id)
     if counts is None:
         counts = await db_manager.get_event_counts_for_group(group_id)
         await redis_manager.set_event_group_counts(group_id, counts)
+
+    user_id = dialog_manager.dialog_data.get("current_user_id")
+    if current_event_id is None and user_id is not None:
+        registration = await db_manager.get_user_event_registration(user_id, group_id)
+        if registration:
+            current_event_id = registration.event_id
+            user_group_registrations[group_id] = current_event_id
+            dialog_manager.dialog_data["user_group_registrations"] = user_group_registrations
 
     events_payload = []
     for event in sorted(events, key=lambda e: e.get("title", "")):
@@ -128,18 +152,32 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
         capacity = capacities.get(event_id, 0)
         taken = counts.get(event_id, 0)
         remaining = max(0, capacity - taken)
-        lock_prefix = "" if remaining > 0 else "🔒 "
-        label = f"{lock_prefix}{event['title']}\nОсталось мест: {remaining}/{capacity}"
+        is_current = current_event_id == event_id
+        locked = bool(current_event_id and current_event_id != event_id)
+        if is_current:
+            prefix = "✅ "
+            info_line = f"Вы зарегистрированы · Осталось мест: {remaining}/{capacity}"
+        elif locked:
+            prefix = "🔒 "
+            info_line = "Недоступно: отмените текущую регистрацию"
+        else:
+            prefix = "🔒 " if remaining <= 0 else ""
+            info_line = f" | Осталось мест: {remaining}/{capacity}"
+
+        label = f"{prefix}{event['title']}\n{info_line}"
         events_payload.append({
             "id": f"event:{event_id}",
             "label": label,
+            "locked": locked,
         })
 
     first_event = events[0]
     day_label = _format_day_label(config.start_date, dialog_manager.dialog_data.get("selected_day", 0))
+    titles_block = "\n".join(f"• {item['title']}" for item in events if item.get("title"))
     group_header = (
         f"<b>{day_label}</b>\n"
         f"{first_event['start_time']} – {first_event['end_time']}\n\n"
+        f"Доступные варианты:\n{titles_block}\n\n"
         "Выберите мероприятие и зарегистрируйтесь на подходящий вариант."
     )
 
@@ -249,6 +287,7 @@ def _compose_schedule_text(
     schedule_items: List[ScheduleItem],
     event_map: Dict[str, Dict[str, Any]],
     group_map: Dict[str, List[Dict[str, Any]]],
+    user_group_registrations: Dict[str, str],
 ) -> str:
     header = f"<b>Расписание – {_format_day_label(start_date, day)}</b>\n"
     lines: List[str] = [header, ""]
@@ -268,10 +307,18 @@ def _compose_schedule_text(
             events = group_map.get(group_id, [])
             if not events:
                 continue
-            titles = ", ".join(event.get("title", "") for event in events)
-            lines.append(
-                f"{events[0]['start_time']} – {events[0]['end_time']} · <b>Параллельные мероприятия</b>: {titles}"
-            )
+            registered_event_id = user_group_registrations.get(group_id)
+            if registered_event_id and registered_event_id in event_map:
+                selected_event = event_map[registered_event_id]
+                location = f" ({selected_event.get('location', '')})" if selected_event.get("location") else ""
+                lines.append(
+                    f"{selected_event['start_time']} – {selected_event['end_time']} · <b>{selected_event['title']}</b>{location}"
+                )
+            else:
+                titles = " | ".join(event.get("title", "") for event in events)
+                lines.append(
+                    f"{events[0]['start_time']} – {events[0]['end_time']} · <b>Параллельные мероприятия</b>: {titles}"
+                )
         lines.append("")
 
     return "\n".join(lines).strip()
