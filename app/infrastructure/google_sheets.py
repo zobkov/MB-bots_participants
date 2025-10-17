@@ -3,7 +3,7 @@
 import logging
 import json
 import os
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -199,3 +199,30 @@ class GoogleSheetsManager:
         except Exception as e:
             logger.error(f"Failed to connect to Google Sheets: {e}")
             return False
+
+    @staticmethod
+    def prepare_event_registration_payload(registrations: List[Dict[str, Any]]) -> List[List[str]]:
+        """Prepare timetable registrations for export without sending data to Google."""
+        headers = [
+            "ID пользователя",
+            "Видимое имя",
+            "Username",
+            "Мероприятие",
+            "Параллель (дата/время)",
+            "Статус",
+            "Время регистрации",
+        ]
+
+        rows: List[List[str]] = []
+        for record in registrations:
+            rows.append([
+                str(record.get("user_id", "")),
+                record.get("visible_name", ""),
+                record.get("username", ""),
+                record.get("event_title", ""),
+                record.get("group_label", ""),
+                record.get("status", "Активна"),
+                record.get("registered_at", ""),
+            ])
+
+        return [headers] + rows

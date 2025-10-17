@@ -7,7 +7,7 @@ from app.bot.states.other import NavigationSG, FaqSG, RegistrationSG
 
 async def go_to_timetable(callback: CallbackQuery, widget, manager: DialogManager):
     """Переход в расписание"""
-    #await manager.start(TimetableSG.days_list)
+    await manager.start(TimetableSG.days_list)
     callback.answer("Расписание пока закрыто", show_alert=False)
 
 

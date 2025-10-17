@@ -1,111 +1,277 @@
 import logging
-from typing import Dict, List, Any
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
 from aiogram_dialog import DialogManager
 
-from config.config import Config, Event
+from app.infrastructure.database import DatabaseManager, RedisManager
+from config.config import Config
+from .utils import (
+    ScheduleItem,
+    build_day_schedule,
+    distribute_capacity,
+    format_event_summary,
+    serialize_event,
+)
 
 logger = logging.getLogger(__name__)
 
+TOTAL_PARALLEL_CAPACITY = 115
+
 
 async def get_days_data(dialog_manager: DialogManager, **kwargs):
-    """Получение данных для списка дней"""
+    """Provide list of conference days."""
     try:
         config: Config = kwargs["config"]
-        
-        # Получаем дни с мероприятиями
         days_with_events = config.get_days_with_events()
-        
-        days_data = []
-        for day in days_with_events:
-            days_data.append({
+
+        days_data = [
+            {
                 "day": day,
-                "day_name": f"День {day}"
-            })
-        
-        logger.info(f"Loaded {len(days_data)} days with events")
-        return {
-            "days": days_data
-        }
-    except Exception as e:
-        logger.error(f"Error getting days data: {e}")
-        return {
-            "days": []
-        }
+                "day_name": _format_day_label(config.start_date, day),
+            }
+            for day in days_with_events
+        ]
+
+        logger.info("Timetable days loaded: %s", len(days_data))
+        return {"days": days_data}
+    except Exception as exc:
+        logger.exception("Failed to load timetable days", exc_info=exc)
+        return {"days": []}
 
 
 async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
-    """Получение данных для списка событий дня"""
+    """Provide schedule structure for selected day."""
     try:
         config: Config = kwargs["config"]
-        
-        # Получаем выбранный день из контекста диалога
         selected_day = dialog_manager.dialog_data.get("selected_day", 0)
-        
-        # Получаем события для этого дня
+
         day_events = config.get_day_events(selected_day)
-        
-        # Формируем текст расписания
-        schedule_text = f"<b>Расписание - День {selected_day}</b>\n\n"
-        
-        events_data = []
-        for event in day_events:
-            schedule_text += f"{event.start_time}-{event.end_time} – <b>{event.title}</b> ({event.location})\n\n"
-            events_data.append({
-                "id": hash(f"{event.title}_{event.start_date}_{event.start_time}"),  # Уникальный ID
-                "title": event.title,
-                "event": event  # Сохраняем полный объект события
-            })
-        
-        logger.info(f"Loaded {len(events_data)} events for day {selected_day}")
+        schedule_items, raw_group_map = build_day_schedule(day_events)
+
+        serialized_events = {event.event_id: serialize_event(event) for event in day_events}
+        event_map: Dict[str, Dict[str, Any]] = serialized_events
+        event_to_group: Dict[str, Optional[str]] = {}
+        group_capacities: Dict[str, Dict[str, int]] = {}
+        group_map: Dict[str, List[Dict[str, Any]]] = {}
+
+        for event_id, payload in serialized_events.items():
+            group_id = payload["group_id"] if payload.get("registration_required") else None
+            event_to_group[event_id] = group_id
+
+        for group_id, events in raw_group_map.items():
+            group_capacities[group_id] = distribute_capacity(TOTAL_PARALLEL_CAPACITY, events)
+            group_map[group_id] = [serialized_events[event.event_id] for event in events]
+
+        dialog_manager.dialog_data["event_map"] = event_map
+        dialog_manager.dialog_data["event_to_group"] = event_to_group
+        dialog_manager.dialog_data["group_map"] = group_map
+        dialog_manager.dialog_data["group_capacities"] = group_capacities
+
+        schedule_text = _compose_schedule_text(
+            config.start_date,
+            selected_day,
+            schedule_items,
+            event_map,
+            group_map,
+        )
+
+        events_payload = [
+            {
+                "id": item.item_id,
+                "label": item.label,
+            }
+            for item in schedule_items
+        ]
+
+        logger.info("Loaded %s schedule items for day %s", len(events_payload), selected_day)
         return {
             "schedule_text": schedule_text,
-            "events": events_data,
-            "selected_day": selected_day
+            "events": events_payload,
+            "selected_day": selected_day,
         }
-    except Exception as e:
-        logger.error(f"Error getting day events data: {e}")
+    except Exception as exc:
+        logger.exception("Failed to load day timetable", exc_info=exc)
         return {
             "schedule_text": "Ошибка загрузки расписания",
             "events": [],
-            "selected_day": 0
+            "selected_day": 0,
         }
+
+
+async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
+    """Provide data for parallel events group window."""
+    config: Config = kwargs["config"]
+    db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+    redis_manager: RedisManager = dialog_manager.middleware_data["redis_manager"]
+
+    group_id = dialog_manager.dialog_data.get("selected_group_id")
+    if not group_id:
+        return {"group_header": "Группа мероприятий не найдена", "group_events": []}
+
+    group_map: Dict[str, List[Dict[str, Any]]] = dialog_manager.dialog_data.get("group_map", {})
+    events = group_map.get(group_id)
+
+    if not events:
+        return {"group_header": "В выбранной группе нет мероприятий", "group_events": []}
+
+    capacities = dialog_manager.dialog_data.get("group_capacities", {}).get(group_id, {})
+
+    counts = await redis_manager.get_event_group_counts(group_id)
+    if counts is None:
+        counts = await db_manager.get_event_counts_for_group(group_id)
+        await redis_manager.set_event_group_counts(group_id, counts)
+
+    events_payload = []
+    for event in sorted(events, key=lambda e: e.get("title", "")):
+        event_id = event["event_id"]
+        capacity = capacities.get(event_id, 0)
+        taken = counts.get(event_id, 0)
+        remaining = max(0, capacity - taken)
+        lock_prefix = "" if remaining > 0 else "🔒 "
+        label = f"{lock_prefix}{event['title']}\nОсталось мест: {remaining}/{capacity}"
+        events_payload.append({
+            "id": f"event:{event_id}",
+            "label": label,
+        })
+
+    first_event = events[0]
+    day_label = _format_day_label(config.start_date, dialog_manager.dialog_data.get("selected_day", 0))
+    group_header = (
+        f"<b>{day_label}</b>\n"
+        f"{first_event['start_time']} – {first_event['end_time']}\n\n"
+        "Выберите мероприятие и зарегистрируйтесь на подходящий вариант."
+    )
+
+    return {
+        "group_header": group_header,
+        "group_events": events_payload,
+    }
 
 
 async def get_event_detail_data(dialog_manager: DialogManager, **kwargs):
-    """Получение данных для детального просмотра события"""
-    try:
-        config: Config = kwargs["config"]
-        
-        # Получаем ID выбранного события
-        selected_event_id = dialog_manager.dialog_data.get("selected_event_id")
+    """Provide detailed information about selected event with registration context."""
+    config: Config = kwargs["config"]
+    db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+    redis_manager: RedisManager = dialog_manager.middleware_data["redis_manager"]
+
+    event_id = dialog_manager.dialog_data.get("selected_event_id")
+    if not event_id:
+        return {"event_detail": "Мероприятие не выбрано"}
+
+    event_map: Dict[str, Dict[str, Any]] = dialog_manager.dialog_data.get("event_map", {})
+    event = event_map.get(event_id)
+
+    if not event:
+        # Rebuild cache if missing (possible after invalidation)
         selected_day = dialog_manager.dialog_data.get("selected_day", 0)
-        
-        # Находим событие по ID
         day_events = config.get_day_events(selected_day)
-        selected_event = None
-        
-        for event in day_events:
-            event_id = hash(f"{event.title}_{event.start_date}_{event.start_time}")
-            if event_id == selected_event_id:
-                selected_event = event
-                break
-        
-        if not selected_event:
-            logger.warning(f"Event with ID {selected_event_id} not found for day {selected_day}")
-            return {"event_detail": "Мероприятие не найдено"}
-        
-        # Формируем текст детального описания
-        detail_text = f"<b>{selected_event.title}</b>\n"
-        detail_text += f"<i>{selected_event.location}</i>\n\n"
-        detail_text += f"{selected_event.description}\n\n"
-        detail_text += f"{selected_event.start_time} – {selected_event.end_time}"
-        
-        logger.info(f"Loaded event detail for: {selected_event.title}")
-        return {
-            "event_detail": detail_text
-        }
-    except Exception as e:
-        logger.error(f"Error getting event detail data: {e}")
-        return {
-            "event_detail": "Ошибка загрузки мероприятия"
-        }
+        for item in day_events:
+            event_map[item.event_id] = serialize_event(item)
+        dialog_manager.dialog_data["event_map"] = event_map
+        event = event_map.get(event_id)
+
+    if not event:
+        logger.warning("Event %s not found in timetable cache", event_id)
+        return {"event_detail": "Мероприятие не найдено"}
+
+    detail_lines = [
+        format_event_summary(
+            event["title"],
+            event.get("location", ""),
+            f"{event['start_time']} – {event['end_time']}",
+        )
+    ]
+    if event.get("description"):
+        detail_lines.append("")
+        detail_lines.append(event["description"])
+
+    group_id = event.get("group_id") if event.get("registration_required") else None
+    register_button_text = "Зарегистрироваться"
+    show_register_button = bool(event.get("registration_required"))
+    show_unregister_button = False
+
+    if event.get("registration_required") and group_id:
+        capacities = dialog_manager.dialog_data.get("group_capacities", {}).get(group_id, {})
+        counts = await redis_manager.get_event_group_counts(group_id)
+        if counts is None:
+            counts = await db_manager.get_event_counts_for_group(group_id)
+            await redis_manager.set_event_group_counts(group_id, counts)
+
+        capacity = capacities.get(event_id, 0)
+        taken = counts.get(event_id, 0)
+        remaining = max(0, capacity - taken)
+
+        detail_lines.append("")
+        detail_lines.append(f"Осталось мест: {remaining}/{capacity}")
+
+        user_id = dialog_manager.event.from_user.id
+        current_registration = await db_manager.get_user_event_registration(user_id, group_id)
+
+        if current_registration and current_registration.event_id == event_id:
+            show_register_button = False
+            show_unregister_button = True
+            detail_lines.append("")
+            detail_lines.append("📝 Вы зарегистрированы на это мероприятие.")
+        elif current_registration:
+            show_unregister_button = True
+            other_event = event_map.get(current_registration.event_id)
+            if other_event:
+                detail_lines.append("")
+                detail_lines.append(
+                    f"ℹ️ Сейчас вы записаны на: <b>{other_event['title']}</b>."
+                )
+            else:
+                detail_lines.append("")
+                detail_lines.append("ℹ️ У вас есть активная регистрация на другой вариант.")
+
+        if remaining <= 0 and show_register_button:
+            register_button_text = "🔒 Регистрация закрыта"
+
+    event_detail = "\n".join(detail_lines)
+
+    return {
+        "event_detail": event_detail,
+        "register_button_text": register_button_text,
+        "show_register_button": show_register_button,
+        "show_unregister_button": show_unregister_button,
+    }
+
+
+def _format_day_label(start_date: datetime, day_offset: int) -> str:
+    target_date = start_date + timedelta(days=day_offset)
+    return target_date.strftime("%d.%m (%A)")
+
+
+def _compose_schedule_text(
+    start_date: datetime,
+    day: int,
+    schedule_items: List[ScheduleItem],
+    event_map: Dict[str, Dict[str, Any]],
+    group_map: Dict[str, List[Dict[str, Any]]],
+) -> str:
+    header = f"<b>Расписание – {_format_day_label(start_date, day)}</b>\n"
+    lines: List[str] = [header, ""]
+
+    for item in schedule_items:
+        if item.type == "simple":
+            event_id = item.item_id.split(":", 1)[1]
+            event = event_map.get(event_id)
+            if not event:
+                continue
+            location = f" ({event.get('location', '')})" if event.get("location") else ""
+            lines.append(
+                f"{event['start_time']} – {event['end_time']} · <b>{event['title']}</b>{location}"
+            )
+        else:
+            group_id = item.group_id
+            events = group_map.get(group_id, [])
+            if not events:
+                continue
+            titles = ", ".join(event.get("title", "") for event in events)
+            lines.append(
+                f"{events[0]['start_time']} – {events[0]['end_time']} · <b>Параллельные мероприятия</b>: {titles}"
+            )
+        lines.append("")
+
+    return "\n".join(lines).strip()

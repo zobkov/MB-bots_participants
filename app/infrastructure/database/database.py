@@ -1,13 +1,26 @@
 """Database manager for SQLAlchemy operations"""
 
 import logging
+from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional, Dict, Any, List
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import text, select, func
+
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from config.config import DatabaseConfig
-from .models import Base, User
+from .models import Base, EventRegistration, User
 
 logger = logging.getLogger(__name__)
+
+
+class EventRegistrationStatus(Enum):
+    SUCCESS = "success"
+    SWITCHED = "switched"
+    ALREADY_REGISTERED_THIS = "already_registered_this"
+    GROUP_FULL = "group_full"
+    USER_NOT_FOUND = "user_not_found"
+    ERROR = "error"
 
 
 class DatabaseManager:
@@ -158,3 +171,152 @@ class DatabaseManager:
                 })
             
             return users_data
+
+    async def register_user_for_event(
+        self,
+        user_id: int,
+        event_id: str,
+        group_id: str,
+        capacity: int,
+    ) -> EventRegistrationStatus:
+        async with self.sessionmaker() as session:
+            try:
+                async with session.begin():
+                    return await self._register_user_for_event(session, user_id, event_id, group_id, capacity)
+            except Exception as exc:
+                logger.error("Error registering user %s for event %s: %s", user_id, event_id, exc)
+                return EventRegistrationStatus.ERROR
+
+    async def _register_user_for_event(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        event_id: str,
+        group_id: str,
+        capacity: int,
+    ) -> EventRegistrationStatus:
+        user = await session.get(User, user_id)
+        if not user:
+            logger.warning("Attempt to register missing user %s", user_id)
+            return EventRegistrationStatus.USER_NOT_FOUND
+
+        existing_registration_result = await session.execute(
+            select(EventRegistration)
+            .where(
+                EventRegistration.user_id == user_id,
+                EventRegistration.group_id == group_id,
+            )
+            .with_for_update()
+        )
+        existing_registration = existing_registration_result.scalar_one_or_none()
+
+        count_stmt = (
+            select(EventRegistration.id)
+            .where(EventRegistration.event_id == event_id)
+            .with_for_update()
+        )
+        current_count = len((await session.execute(count_stmt)).scalars().all())
+
+        if existing_registration:
+            if existing_registration.event_id == event_id:
+                return EventRegistrationStatus.ALREADY_REGISTERED_THIS
+
+            if current_count >= capacity:
+                return EventRegistrationStatus.GROUP_FULL
+
+            existing_registration.event_id = event_id
+            existing_registration.registered_at = datetime.now(timezone.utc)
+            await session.flush()
+            return EventRegistrationStatus.SWITCHED
+
+        if current_count >= capacity:
+            return EventRegistrationStatus.GROUP_FULL
+
+        registration = EventRegistration(
+            user_id=user_id,
+            event_id=event_id,
+            group_id=group_id,
+            registered_at=datetime.now(timezone.utc),
+        )
+        session.add(registration)
+        await session.flush()
+        return EventRegistrationStatus.SUCCESS
+
+    async def unregister_user_from_event(self, user_id: int, group_id: str) -> bool:
+        async with self.sessionmaker() as session:
+            try:
+                async with session.begin():
+                    result = await session.execute(
+                        select(EventRegistration)
+                        .where(
+                            EventRegistration.user_id == user_id,
+                            EventRegistration.group_id == group_id,
+                        )
+                        .with_for_update()
+                    )
+                    registration = result.scalar_one_or_none()
+                    if not registration:
+                        return False
+
+                    await session.delete(registration)
+                    await session.flush()
+                    return True
+            except Exception as exc:
+                logger.error("Error unregistering user %s from group %s: %s", user_id, group_id, exc)
+                return False
+
+    async def get_event_counts_for_group(self, group_id: str) -> Dict[str, int]:
+        async with self.sessionmaker() as session:
+            result = await session.execute(
+                select(EventRegistration.event_id, func.count(EventRegistration.id))
+                .where(EventRegistration.group_id == group_id)
+                .group_by(EventRegistration.event_id)
+            )
+            counts = {event_id: count for event_id, count in result.fetchall()}
+            logger.debug("Group %s counts: %s", group_id, counts)
+            return counts
+
+    async def get_user_event_registration(self, user_id: int, group_id: str) -> Optional[EventRegistration]:
+        async with self.sessionmaker() as session:
+            result = await session.execute(
+                select(EventRegistration)
+                .where(
+                    EventRegistration.user_id == user_id,
+                    EventRegistration.group_id == group_id,
+                )
+            )
+            return result.scalar_one_or_none()
+
+    async def get_event_registrations_for_export(self) -> List[Dict[str, Any]]:
+        """Collect event registrations with user info for offline export preparation."""
+        async with self.sessionmaker() as session:
+            result = await session.execute(
+                select(
+                    EventRegistration.user_id,
+                    EventRegistration.event_id,
+                    EventRegistration.group_id,
+                    EventRegistration.registered_at,
+                    User.visible_name,
+                    User.username,
+                )
+                .join(User, User.id == EventRegistration.user_id)
+                .order_by(EventRegistration.group_id, EventRegistration.registered_at)
+            )
+
+            payload: List[Dict[str, Any]] = []
+            for row in result.all():
+                registered_at = row.registered_at.isoformat() if row.registered_at else ""
+                payload.append(
+                    {
+                        "user_id": row.user_id,
+                        "event_id": row.event_id,
+                        "group_id": row.group_id,
+                        "registered_at": registered_at,
+                        "visible_name": row.visible_name,
+                        "username": f"@{row.username}" if row.username else "",
+                        "status": "Активна",
+                        "event_title": "",
+                        "group_label": "",
+                    }
+                )
+            return payload

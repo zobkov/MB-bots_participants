@@ -3,7 +3,8 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+import hashlib
 from environs import Env
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ class Event:
     start_time: str
     end_date: str
     end_time: str
+    registration_required: bool = False
 
     @property
     def start_datetime(self) -> datetime:
@@ -63,6 +65,20 @@ class Event:
     @property
     def end_datetime(self) -> datetime:
         return datetime.strptime(f"{self.end_date} {self.end_time}", "%Y-%m-%d %H:%M")
+
+    @property
+    def event_id(self) -> str:
+        """Deterministic identifier for the event, safe to store in DB."""
+        payload = f"{self.title}|{self.start_date}|{self.start_time}"
+        return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+    @property
+    def group_id(self) -> Optional[str]:
+        """Identifier for a parallel registration group, if applicable."""
+        if not self.registration_required:
+            return None
+        payload = f"{self.start_date}|{self.start_time}|parallel"
+        return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
 
 
 @dataclass

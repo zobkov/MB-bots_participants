@@ -15,6 +15,9 @@ class RedisManager:
     # Redis keys
     DEBATE_COUNTS_KEY = "debate:registrations:counts"
     DEBATE_LIMITS_KEY = "debate:registrations:limits"
+    EVENT_GROUP_PREFIX = "timetable:group"
+    EVENT_GROUP_SUFFIX = "counts"
+    EVENT_TTL_SECONDS = 60 * 60 * 3  # 3 hours
     
     # Debate case limits
     LIMITS = {
@@ -113,3 +116,26 @@ class RedisManager:
             5: "Альфа"
         }
         return names.get(case_number, "Unknown")
+
+    # --- Event registration helpers -------------------------------------------------
+
+    def _event_group_key(self, group_id: str) -> str:
+        return f"{self.EVENT_GROUP_PREFIX}:{group_id}:{self.EVENT_GROUP_SUFFIX}"
+
+    async def get_event_group_counts(self, group_id: str) -> Optional[Dict[str, int]]:
+        """Return cached counts for a parallel group or None if cache missing."""
+        key = self._event_group_key(group_id)
+        data = await self.redis.hgetall(key)
+        if data is None or len(data) == 0:
+            return None
+
+        cleaned = {k: int(v) for k, v in data.items() if not k.startswith("__")}
+        return cleaned
+
+    async def set_event_group_counts(self, group_id: str, counts: Dict[str, int]):
+        """Store counts for event group and refresh TTL."""
+        key = self._event_group_key(group_id)
+        mapping = {k: str(v) for k, v in counts.items()} if counts else {"__placeholder__": "0"}
+        await self.redis.delete(key)
+        await self.redis.hset(key, mapping=mapping)
+        await self.redis.expire(key, self.EVENT_TTL_SECONDS)
