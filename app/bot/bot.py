@@ -45,8 +45,8 @@ async def setup_redis_storage(config) -> RedisStorage:
     storage = RedisStorage(
         redis=redis_client,
         key_builder=DefaultKeyBuilder(with_bot_id=True, with_destiny=True),
-        state_ttl=86400,  # 1 день
-        data_ttl=86400
+        state_ttl=259200,  # 3 дня хранения состояния диалога
+        data_ttl=259200
     )
     
     return storage
