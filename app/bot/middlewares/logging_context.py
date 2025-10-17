@@ -6,7 +6,7 @@ import logging
 from typing import Any, Callable, Dict, Awaitable
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject, Update, Message, CallbackQuery
+from aiogram.types import TelegramObject, Update
 
 from app.infrastructure.telegram_logging import get_log_context
 
@@ -34,6 +34,8 @@ class LoggingContextMiddleware(BaseMiddleware):
         # Устанавливаем контекст для логов
         log_ctx = get_log_context()
         token = log_ctx.set(context)
+        # Пробрасываем базовые объекты в data для fallback-отправки сообщений
+        self._inject_event_objects(event, data)
         
         try:
             # Логируем начало обработки для отладки
@@ -97,3 +99,22 @@ class LoggingContextMiddleware(BaseMiddleware):
                     context["chat_id"] = event.callback_query.message.chat.id
         
         return context
+
+    @staticmethod
+    def _inject_event_objects(event: TelegramObject, data: Dict[str, Any]) -> None:
+        """Сохраняем объекты чата и пользователя в data для последующих middleware."""
+        if "event_chat" not in data:
+            chat_obj = getattr(event, "chat", None)
+            if chat_obj is None and isinstance(event, Update) and event.message:
+                chat_obj = event.message.chat
+            elif chat_obj is None and isinstance(event, Update) and event.callback_query and event.callback_query.message:
+                chat_obj = event.callback_query.message.chat
+            data["event_chat"] = chat_obj
+        if "event_from_user" not in data:
+            user_obj = getattr(event, "from_user", None)
+            if user_obj is None and isinstance(event, Update):
+                if event.message and event.message.from_user:
+                    user_obj = event.message.from_user
+                elif event.callback_query and event.callback_query.from_user:
+                    user_obj = event.callback_query.from_user
+            data["event_from_user"] = user_obj

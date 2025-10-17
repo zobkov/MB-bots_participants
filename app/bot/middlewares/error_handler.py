@@ -33,7 +33,7 @@ class ErrorHandlerMiddleware(BaseMiddleware):
             return await handler(event, data)
         except Exception as error:
             if self._is_dialog_context_issue(error):
-                logger.warning(f"Dialog context issue: {error}")
+                logger.info(f"Dialog context issue: {error}")
                 await self._notify_user(
                     event,
                     data,
