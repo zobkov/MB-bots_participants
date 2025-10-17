@@ -278,7 +278,17 @@ async def get_event_detail_data(dialog_manager: DialogManager, **kwargs):
 
 def _format_day_label(start_date: datetime, day_offset: int) -> str:
     target_date = start_date + timedelta(days=day_offset)
-    return target_date.strftime("%d.%m (%A)")
+    weekday_names = {
+        0: "Понедельник",
+        1: "Вторник",
+        2: "Среда",
+        3: "Четверг",
+        4: "Пятница",
+        5: "Суббота",
+        6: "Воскресенье",
+    }
+    weekday = weekday_names.get(target_date.weekday(), target_date.strftime("%A"))
+    return target_date.strftime("%d.%m (") + weekday + ")"
 
 
 def _compose_schedule_text(
