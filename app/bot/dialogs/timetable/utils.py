@@ -41,18 +41,34 @@ def format_event_summary(title: str, location: str, time_range: str) -> str:
 
 
 def distribute_capacity(total_capacity: int, events: List[Event]) -> Dict[str, int]:
-    """Split total capacity equally between events and assign leftovers to later items."""
+    """Split total capacity with support for per-event overrides."""
 
     if not events:
         return {}
 
-    base = total_capacity // len(events)
-    remainder = total_capacity % len(events)
-
     capacities: Dict[str, int] = {}
-    for index, event in enumerate(sorted(events, key=lambda e: e.title)):
-        extra = 1 if index >= len(events) - remainder else 0
-        capacities[event.event_id] = base + extra
+    overrides = {
+        event.event_id: event.capacity_override
+        for event in events
+        if event.capacity_override is not None and event.capacity_override >= 0
+    }
+
+    override_total = sum(overrides.values())
+    remaining_capacity = max(0, total_capacity - override_total)
+
+    flexible_events = [event for event in events if event.event_id not in overrides]
+
+    if flexible_events:
+        base = remaining_capacity // len(flexible_events)
+        remainder = remaining_capacity % len(flexible_events)
+
+        for index, event in enumerate(sorted(flexible_events, key=lambda e: e.title)):
+            extra = 1 if index >= len(flexible_events) - remainder else 0
+            capacities[event.event_id] = base + extra
+
+    for event_id, custom_capacity in overrides.items():
+        capacities[event_id] = custom_capacity
+
     return capacities
 
 
@@ -116,4 +132,5 @@ def serialize_event(event: Event) -> Dict[str, Any]:
         "end_time": event.end_time,
         "registration_required": event.registration_required,
         "group_title": event.group_title,
+        "capacity_override": event.capacity_override,
     }

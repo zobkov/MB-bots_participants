@@ -58,6 +58,7 @@ class Event:
     end_time: str
     registration_required: bool = False
     group_title: Optional[str] = None
+    capacity_override: Optional[int] = None
 
     @property
     def start_datetime(self) -> datetime:

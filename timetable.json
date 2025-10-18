@@ -253,7 +253,8 @@
     "start_time": "14:30",
     "end_date": "2025-10-25",
     "end_time": "15:50",
-    "registration_required": true
+    "registration_required": true,
+    "capacity_override": 30
   },
   {
     "title": "Продуктовый кейс-баттл от Альфа-Банка (продолжение)",
@@ -273,7 +274,8 @@
     "start_time": "14:30",
     "end_date": "2025-10-25",
     "end_time": "15:50",
-    "registration_required": true
+    "registration_required": true,
+    "capacity_override": 30
   },
   {
     "title": "MB Talks",
