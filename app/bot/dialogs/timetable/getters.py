@@ -107,12 +107,31 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
         if timetable_media:
             file_id = timetable_media.get(day_key)
             if file_id is None:
+                fallback_key: Optional[str]
                 try:
-                    filename_key = f"{int(day_key) + 1}.png"
+                    fallback_key = f"{int(day_key)}.png"
                 except ValueError:
-                    filename_key = None
-                if filename_key:
-                    file_id = timetable_media.get(filename_key)
+                    fallback_key = None
+
+                if fallback_key == "0.png":
+                    fallback_key = "1.png"
+
+                if fallback_key:
+                    file_id = timetable_media.get(fallback_key)
+
+            if file_id is None:
+                ordered_filenames = sorted(
+                    name
+                    for name in timetable_media.keys()
+                    if name.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
+                )
+                try:
+                    index = int(day_key)
+                except (ValueError, TypeError):
+                    index = None
+                if index is not None and 0 <= index < len(ordered_filenames):
+                    file_id = timetable_media.get(ordered_filenames[index])
+
             if file_id:
                 day_media_id = MediaAttachment(ContentType.PHOTO, file_id=MediaId(file_id))
 
