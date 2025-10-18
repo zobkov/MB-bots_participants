@@ -22,7 +22,7 @@ from .getters import (
 timetable_dialog = Dialog(
     # Окно со списком дней
     Window(
-        Const("Расписание конференции"),
+        Const("Расписание конференции\n\n<b>ВНИМАНИЕ</b> \nНеобходимо зарегестрироваться на мероприятия, которые отмечены как параллельные"),
         Group(
             Select(
                 Format("{item[day_name]}"),
