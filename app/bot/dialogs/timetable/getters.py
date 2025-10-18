@@ -147,6 +147,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
             dialog_manager.dialog_data["user_group_registrations"] = user_group_registrations
 
     events_payload = []
+    availability_lines: List[str] = []
     for event in sorted(events, key=lambda e: e.get("title", "")):
         event_id = event["event_id"]
         capacity = capacities.get(event_id, 0)
@@ -170,10 +171,13 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
             "label": label,
             "locked": locked,
         })
+        availability_lines.append(
+            f"• {event['title']} — осталось мест: {remaining}/{capacity}"
+        )
 
     first_event = events[0]
     day_label = _format_day_label(config.start_date, dialog_manager.dialog_data.get("selected_day", 0))
-    titles_block = "\n".join(f"• {item['title']}" for item in events if item.get("title"))
+    titles_block = "\n".join(availability_lines)
     group_header = (
         f"<b>{day_label}</b>\n"
         f"{first_event['start_time']} – {first_event['end_time']}\n\n"
