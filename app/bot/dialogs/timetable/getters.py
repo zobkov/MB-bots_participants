@@ -175,7 +175,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
         location = event.get("location") or ""
         location_suffix = f" ({location})" if location else ""
         availability_lines.append(
-            f"• <b>{event['title']}</b>{location_suffix}\n  Осталось мест: {remaining}/{capacity}"
+            f"\n• <b>{event['title']}</b>{location_suffix}\n  Осталось мест: {remaining}/{capacity}"
         )
 
     primary_event = sorted_events[0]
