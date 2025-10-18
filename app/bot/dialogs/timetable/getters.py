@@ -172,7 +172,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
             "locked": locked,
         })
         availability_lines.append(
-            f"• {event['title']} — осталось мест: {remaining}/{capacity}"
+            f"\n• <b>{event['title']}</b>\nОсталось мест: {remaining}/{capacity}"
         )
 
     first_event = events[0]
