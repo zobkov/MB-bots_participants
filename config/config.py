@@ -57,6 +57,7 @@ class Event:
     end_date: str
     end_time: str
     registration_required: bool = False
+    group_title: Optional[str] = None
 
     @property
     def start_datetime(self) -> datetime:

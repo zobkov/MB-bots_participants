@@ -37,7 +37,8 @@
     "start_time": "14:30",
     "end_date": "2025-10-23",
     "end_time": "15:50",
-    "registration_required": true
+    "registration_required": true,
+    "group_title": "Панельные дискуссии (параллель)"
   },
   {
     "title": "Возрождение малых городов — новые центры притяжения",
@@ -47,7 +48,8 @@
     "start_time": "14:30",
     "end_date": "2025-10-23",
     "end_time": "15:50",
-    "registration_required": true
+    "registration_required": true,
+    "group_title": "Панельные дискуссии (параллель)"
   },
   {
     "title": "Нейроны мегаполисов: AI, IoT и Big Data как цифровая нервная система",
@@ -57,7 +59,8 @@
     "start_time": "14:30",
     "end_date": "2025-10-23",
     "end_time": "15:50",
-    "registration_required": true
+    "registration_required": true,
+    "group_title": "Панельные дискуссии (параллель)"
   },
   {
     "title": "Dream Team: как из группы людей сделать команду мечты",
@@ -67,7 +70,8 @@
     "start_time": "16:20",
     "end_date": "2025-10-23",
     "end_time": "18:00",
-    "registration_required": true
+    "registration_required": true,
+    "group_title": "Практические воркшопы (параллель)"
   },
   {
     "title": "Город как бренд: как раскрыть идентичность территории",
@@ -77,7 +81,8 @@
     "start_time": "16:20",
     "end_date": "2025-10-23",
     "end_time": "18:00",
-    "registration_required": true
+    "registration_required": true,
+    "group_title": "Практические воркшопы (параллель)"
   },
   {
     "title": "Моделирование арктического города",
@@ -87,7 +92,8 @@
     "start_time": "16:20",
     "end_date": "2025-10-23",
     "end_time": "18:00",
-    "registration_required": true
+    "registration_required": true,
+    "group_title": "Практические воркшопы (параллель)"
   },
   {
     "title": "Индивидуальное мероприятие ВТБ — «Переговоры в рамках сделок долгового финансирования»",
@@ -110,7 +116,7 @@
     "registration_required": true
   },
   {
-    "title": "Выступление Андрея Костина",
+    "title": "Выступление А.Л. Костина, главы ВТБ",
     "description": "<b>Модератор:</b>\n• Ольга Дергунова – руководитель ВТБ Образование, старший вице-президент Банка ВТБ, директор Высшей школы менеджмента СПбГУ",
     "location": "Ауд. 1301",
     "start_date": "2025-10-24",

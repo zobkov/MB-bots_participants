@@ -61,12 +61,15 @@ def build_day_schedule(events: List[Event]) -> Tuple[List[ScheduleItem], Dict[st
 
     schedule: List[ScheduleItem] = []
     groups: Dict[str, List[Event]] = {}
+    group_titles: Dict[str, str] = {}
 
     for event in events:
         group_id = generate_group_id(event) if event.registration_required else None
 
         if group_id:
             groups.setdefault(group_id, []).append(event)
+            if event.group_title and group_id not in group_titles:
+                group_titles[group_id] = event.group_title
         else:
             schedule.append(
                 ScheduleItem(
@@ -84,10 +87,11 @@ def build_day_schedule(events: List[Event]) -> Tuple[List[ScheduleItem], Dict[st
         group_id = generate_group_id(event) if event.registration_required else None
         if group_id and group_id not in added_groups:
             added_groups.add(group_id)
+            display_title = group_titles.get(group_id, "Параллельные мероприятия")
             schedule.append(
                 ScheduleItem(
                     item_id=f"group:{group_id}",
-                    label=f"{event.start_time} – {event.end_time} · Параллельные мероприятия (регистрация)",
+                    label=f"{event.start_time} – {event.end_time} · {display_title}",
                     start_datetime=event.start_datetime.isoformat(),
                     type="group",
                     group_id=group_id,
@@ -111,4 +115,5 @@ def serialize_event(event: Event) -> Dict[str, Any]:
         "end_date": event.end_date,
         "end_time": event.end_time,
         "registration_required": event.registration_required,
+        "group_title": event.group_title,
     }

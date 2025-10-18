@@ -146,9 +146,10 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
             user_group_registrations[group_id] = current_event_id
             dialog_manager.dialog_data["user_group_registrations"] = user_group_registrations
 
+    sorted_events = sorted(events, key=lambda e: e.get("title", ""))
     events_payload = []
     availability_lines: List[str] = []
-    for event in sorted(events, key=lambda e: e.get("title", "")):
+    for event in sorted_events:
         event_id = event["event_id"]
         capacity = capacities.get(event_id, 0)
         taken = counts.get(event_id, 0)
@@ -172,15 +173,17 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
             "locked": locked,
         })
         availability_lines.append(
-            f"\n• <b>{event['title']}</b>\nОсталось мест: {remaining}/{capacity}"
+            f"• <b>{event['title']}</b>\n  Осталось мест: {remaining}/{capacity}"
         )
 
-    first_event = events[0]
+    primary_event = sorted_events[0]
     day_label = _format_day_label(config.start_date, dialog_manager.dialog_data.get("selected_day", 0))
     titles_block = "\n".join(availability_lines)
+    group_title = primary_event.get("group_title") or "Параллельные мероприятия"
     group_header = (
         f"<b>{day_label}</b>\n"
-        f"{first_event['start_time']} – {first_event['end_time']}\n\n"
+        f"{primary_event['start_time']} – {primary_event['end_time']}\n"
+        f"<b>{group_title}</b>\n\n"
         f"Доступные варианты:\n{titles_block}\n\n"
         "Выберите мероприятие и зарегистрируйтесь на подходящий вариант."
     )
@@ -329,9 +332,10 @@ def _compose_schedule_text(
                     f"{selected_event['start_time']} – {selected_event['end_time']} · <b>{selected_event['title']}</b>{location}"
                 )
             else:
-                titles = "\n• ".join(event.get("title", "") for event in events)
+                titles = " | ".join(event.get("title", "") for event in events)
+                group_title = events[0].get("group_title") or "Параллельные мероприятия"
                 lines.append(
-                    f"{events[0]['start_time']} – {events[0]['end_time']} · <b>Параллельные мероприятия</b>: \n• {titles}"
+                    f"{events[0]['start_time']} – {events[0]['end_time']} · <b>{group_title}</b>: {titles}"
                 )
         lines.append("")
 
