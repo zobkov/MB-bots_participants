@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from aiogram_dialog import DialogManager
+from aiogram_dialog.api.entities import MediaAttachment, MediaId
+from aiogram.enums import ContentType
 
 from app.infrastructure.database import DatabaseManager, RedisManager
 from config.config import Config
@@ -99,10 +101,26 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
         ]
 
         logger.info("Loaded %s schedule items for day %s", len(events_payload), selected_day)
+        day_key = str(selected_day)
+        day_media_id: Optional[MediaAttachment] = None
+        timetable_media = config.timetable_media
+        if timetable_media:
+            file_id = timetable_media.get(day_key)
+            if file_id is None:
+                try:
+                    filename_key = f"{int(day_key) + 1}.png"
+                except ValueError:
+                    filename_key = None
+                if filename_key:
+                    file_id = timetable_media.get(filename_key)
+            if file_id:
+                day_media_id = MediaAttachment(ContentType.PHOTO, file_id=MediaId(file_id))
+
         return {
             "schedule_text": schedule_text,
             "events": events_payload,
             "selected_day": selected_day,
+            "day_photo": day_media_id,
         }
     except Exception as exc:
         logger.exception("Failed to load day timetable", exc_info=exc)

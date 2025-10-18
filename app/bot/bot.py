@@ -14,6 +14,7 @@ from app.bot.middlewares.config import ConfigMiddleware
 from app.bot.middlewares.logging_context import LoggingContextMiddleware
 from app.infrastructure.database import DatabaseManager, RedisManager
 from app.infrastructure.google_sheets import GoogleSheetsManager
+from app.infrastructure.timetable_media import ensure_timetable_media
 
 # Импорт всех диалогов
 from app.bot.dialogs.start import start_dialog
@@ -150,6 +151,13 @@ async def main():
     
     # Настройка диалогов
     setup_dialogs(dp)
+
+    # Обеспечиваем наличие актуальных file_id для иллюстраций расписания
+    try:
+        timetable_media = await ensure_timetable_media(bot)
+        dp["config"].timetable_media = timetable_media
+    except Exception as media_exc:  # noqa: BLE001
+        logger.exception("Failed to prepare timetable media", exc_info=media_exc)
     
     logger.info("Bot started successfully!")
     

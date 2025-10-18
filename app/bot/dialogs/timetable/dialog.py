@@ -1,6 +1,7 @@
 from aiogram_dialog import Dialog, Window
 from aiogram_dialog.widgets.kbd import Button, Back, Select, Group, Cancel
 from aiogram_dialog.widgets.text import Const, Format
+from aiogram_dialog.widgets.media import DynamicMedia
 
 from .states import TimetableSG
 from .handlers import (
@@ -40,7 +41,8 @@ timetable_dialog = Dialog(
     
     # Окно с событиями выбранного дня
     Window(
-        Format("{schedule_text}"),
+    DynamicMedia("day_photo"),
+    Format("{schedule_text}"),
         Group(
             Select(
                 Format("{item[label]}"),

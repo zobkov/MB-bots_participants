@@ -1,8 +1,9 @@
 import logging
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 import hashlib
 from environs import Env
@@ -92,6 +93,7 @@ class Config:
     google_sheets: GoogleSheetsConfig
     start_date: datetime
     events: List[Event]
+    timetable_media: Dict[str, str] = field(default_factory=dict)
 
     def get_day_events(self, day: int) -> List[Event]:
         """Получить события для определенного дня конференции (0-4)"""
@@ -183,6 +185,18 @@ def load_config(path: str = None) -> Config:
     # Создание объектов событий
     events = [Event(**event_data) for event_data in timetable_data]
 
+    # Загрузка file_id для изображений расписания (если уже сохранены)
+    timetable_media_path = Path("assets") / "timetable" / "file_ids.json"
+    timetable_media: Dict[str, str] = {}
+    if timetable_media_path.exists():
+        try:
+            with timetable_media_path.open("r", encoding="utf-8") as media_file:
+                data = json.load(media_file)
+                if isinstance(data, dict):
+                    timetable_media = {str(key): str(value) for key, value in data.items()}
+        except Exception as exc:
+            logger.warning("Failed to load timetable media mapping: %s", exc)
+
     logger.info(f"Loaded {len(events)} events from timetable")
     logger.info(f"Conference start date: {start_date.strftime('%Y-%m-%d')}")
 
@@ -193,5 +207,6 @@ def load_config(path: str = None) -> Config:
         logging=logging_config,
         google_sheets=google_sheets_config,
         start_date=start_date,
-        events=events
+        events=events,
+        timetable_media=timetable_media
     )
