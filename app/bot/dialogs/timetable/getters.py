@@ -8,6 +8,17 @@ from aiogram.enums import ContentType
 
 from app.infrastructure.database import DatabaseManager, RedisManager
 from config.config import Config
+from .vr_lab import (
+    VR_LAB_GROUP_ID,
+    VR_LAB_ROOMS,
+    VR_LAB_SLOT_TIMES,
+    TOTAL_SLOTS_PER_ROOM,
+    build_slot_event_id,
+    count_room_taken_slots,
+    is_vr_lab_event,
+    parse_slot_event_id,
+    ensure_room,
+)
 from .utils import (
     ScheduleItem,
     build_day_schedule,
@@ -150,6 +161,203 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
         }
 
 
+async def get_vr_lab_rooms_data(dialog_manager: DialogManager, **kwargs):
+    config: Config = kwargs["config"]
+    db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+    redis_manager: RedisManager = dialog_manager.middleware_data["redis_manager"]
+
+    event_payload = dialog_manager.dialog_data.get("vr_lab_event_payload")
+    if not event_payload:
+        selected_event_id = dialog_manager.dialog_data.get("selected_event_id")
+        fallback_event = dialog_manager.dialog_data.get("event_map", {}).get(selected_event_id or "")
+        if fallback_event and is_vr_lab_event(fallback_event):
+            event_payload = fallback_event
+        else:
+            return {
+                "vr_lab_header": "VR-lab не найдена",
+                "vr_rooms": [],
+                "show_unregister_button": False,
+            }
+
+    user_id = dialog_manager.dialog_data.get("current_user_id")
+    counts = await redis_manager.get_event_group_counts(VR_LAB_GROUP_ID)
+    if counts is None:
+        counts = await db_manager.get_event_counts_for_group(VR_LAB_GROUP_ID)
+        await redis_manager.set_event_group_counts(VR_LAB_GROUP_ID, counts)
+
+    registration_event_id = dialog_manager.dialog_data.get("vr_lab_registration_event_id")
+    registration_room = None
+    registration_slot = None
+
+    if user_id is not None:
+        registration = await db_manager.get_user_event_registration(user_id, VR_LAB_GROUP_ID)
+        if registration:
+            registration_event_id = registration.event_id
+
+    if registration_event_id:
+        parsed = parse_slot_event_id(registration_event_id)
+        if parsed:
+            registration_room, registration_slot = parsed
+            dialog_manager.dialog_data["vr_lab_registration_event_id"] = registration_event_id
+
+    if registration_room and not dialog_manager.dialog_data.get("vr_lab_selected_room"):
+        dialog_manager.dialog_data["vr_lab_selected_room"] = registration_room
+
+    rooms_payload: List[Dict[str, Any]] = []
+    availability_lines: List[str] = []
+    for room in VR_LAB_ROOMS:
+        taken = count_room_taken_slots(room, counts)
+        remaining = max(0, TOTAL_SLOTS_PER_ROOM - taken)
+        prefix = ""
+        if room == registration_room:
+            prefix = "✅ "
+            status_line = f"Вы записаны · Свободно: {remaining}/{TOTAL_SLOTS_PER_ROOM}"
+        elif remaining == 0:
+            prefix = "🔒 "
+            status_line = f"Свободных слотов нет"
+        else:
+            status_line = f"Свободно: {remaining}/{TOTAL_SLOTS_PER_ROOM}"
+
+        rooms_payload.append(
+            {
+                "id": f"room:{room}",
+                "label": f"{prefix}Ауд. {room}\n{status_line}",
+            }
+        )
+        availability_lines.append(
+            f"• Ауд. {room}: {remaining}/{TOTAL_SLOTS_PER_ROOM} свободно"
+        )
+
+    day_label = _format_day_label(config.start_date, dialog_manager.dialog_data.get("selected_day", 0))
+
+    header_lines = [
+        f"<b>{day_label}</b>",
+        f"{event_payload['start_time']} – {event_payload['end_time']} · <b>{event_payload['title']}</b>",
+    ]
+    if event_payload.get("location"):
+        header_lines.append(f"Локация: {event_payload['location']}")
+
+    header_lines.append("")
+    header_lines.append("Выбери аудиторию VR-lab. В каждой аудитории слоты по 15 минут на одного участника.")
+    header_lines.append("")
+    header_lines.append("<b>Доступность:</b>")
+    header_lines.extend(availability_lines)
+
+    if registration_room and registration_slot:
+        header_lines.append("")
+        header_lines.append(
+            f"📝 Вы записаны: ауд. {registration_room}, {registration_slot}"
+        )
+
+    return {
+        "vr_lab_header": "\n".join(header_lines),
+        "vr_rooms": rooms_payload,
+        "show_unregister_button": bool(registration_event_id),
+    }
+
+
+async def get_vr_lab_slots_data(dialog_manager: DialogManager, **kwargs):
+    config: Config = kwargs["config"]
+    db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+    redis_manager: RedisManager = dialog_manager.middleware_data["redis_manager"]
+
+    event_payload = dialog_manager.dialog_data.get("vr_lab_event_payload")
+    if not event_payload:
+        selected_event_id = dialog_manager.dialog_data.get("selected_event_id")
+        fallback_event = dialog_manager.dialog_data.get("event_map", {}).get(selected_event_id or "")
+        if fallback_event and is_vr_lab_event(fallback_event):
+            event_payload = fallback_event
+        else:
+            return {
+                "vr_lab_slots_header": "VR-lab не найдена",
+                "vr_slots": [],
+                "show_unregister_button": False,
+            }
+
+    user_id = dialog_manager.dialog_data.get("current_user_id")
+    counts = await redis_manager.get_event_group_counts(VR_LAB_GROUP_ID)
+    if counts is None:
+        counts = await db_manager.get_event_counts_for_group(VR_LAB_GROUP_ID)
+        await redis_manager.set_event_group_counts(VR_LAB_GROUP_ID, counts)
+
+    registration_event_id = dialog_manager.dialog_data.get("vr_lab_registration_event_id")
+    registration_room = None
+    registration_slot = None
+
+    if user_id is not None:
+        registration = await db_manager.get_user_event_registration(user_id, VR_LAB_GROUP_ID)
+        if registration:
+            registration_event_id = registration.event_id
+
+    if registration_event_id:
+        parsed = parse_slot_event_id(registration_event_id)
+        if parsed:
+            registration_room, registration_slot = parsed
+            dialog_manager.dialog_data["vr_lab_registration_event_id"] = registration_event_id
+
+    selected_room = dialog_manager.dialog_data.get("vr_lab_selected_room")
+    if not selected_room:
+        if registration_room:
+            selected_room = registration_room
+        else:
+            selected_room = VR_LAB_ROOMS[0]
+        dialog_manager.dialog_data["vr_lab_selected_room"] = selected_room
+
+    try:
+        ensure_room(selected_room)
+    except ValueError:
+        selected_room = VR_LAB_ROOMS[0]
+        dialog_manager.dialog_data["vr_lab_selected_room"] = selected_room
+
+    slots_payload: List[Dict[str, Any]] = []
+    for slot_time in VR_LAB_SLOT_TIMES:
+        event_id = build_slot_event_id(selected_room, slot_time)
+        taken = counts.get(event_id, 0)
+        remaining = max(0, 1 - taken)
+        is_current = registration_event_id == event_id
+        locked = taken >= 1 and not is_current
+
+        if is_current:
+            prefix = "✅ "
+            status_line = "Вы записаны"
+        elif locked:
+            prefix = "🔒 "
+            status_line = "Слот занят"
+        else:
+            prefix = ""
+            status_line = "Свободно"
+
+        slots_payload.append(
+            {
+                "id": event_id,
+                "label": f"{prefix}{slot_time}\n{status_line}",
+            }
+        )
+
+    day_label = _format_day_label(config.start_date, dialog_manager.dialog_data.get("selected_day", 0))
+    room_line = f"Аудитория {selected_room}"
+
+    header_lines = [
+        f"<b>{day_label}</b>",
+        f"{event_payload['title']}",
+        room_line,
+        "",
+        "Выбери подходящий слот (15 минут). Каждый слот доступен только одному участнику.",
+    ]
+
+    if registration_room and registration_slot:
+        header_lines.append("")
+        header_lines.append(
+            f"📝 Текущая запись: ауд. {registration_room}, {registration_slot}"
+        )
+
+    return {
+        "vr_lab_slots_header": "\n".join(header_lines),
+        "vr_slots": slots_payload,
+        "show_unregister_button": bool(registration_event_id),
+    }
+
+
 async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
     """Provide data for parallel events group window."""
     config: Config = kwargs["config"]
@@ -224,7 +432,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
         f"{primary_event['start_time']} – {primary_event['end_time']}\n"
         f"<b>{group_title}</b>\n\n"
         f"Доступные варианты:\n{titles_block}\n\n"
-        "Выберите мероприятие и зарегистрируйтесь на подходящий вариант."
+        "Выбери мероприятие и зарегистрируйся на подходящий вариант."
     )
 
     return {

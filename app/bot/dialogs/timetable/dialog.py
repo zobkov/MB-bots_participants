@@ -11,12 +11,19 @@ from .handlers import (
     on_register_event,
     on_unregister_event,
     on_back_to_day_events,
+    on_vr_room_selected,
+    on_vr_slot_selected,
+    on_vr_lab_unregister,
+    on_vr_back_to_day,
+    on_vr_back_to_rooms,
 )
 from .getters import (
     get_days_data,
     get_day_events_data,
     get_group_events_data,
     get_event_detail_data,
+    get_vr_lab_rooms_data,
+    get_vr_lab_slots_data,
 )
 
 
@@ -74,6 +81,66 @@ timetable_dialog = Dialog(
         Back(Const("⬅️ Назад"), id="back_to_day_events"),
         state=TimetableSG.group_events,
         getter=get_group_events_data,
+    ),
+
+    Window(
+        Format("{vr_lab_header}"),
+        Group(
+            Select(
+                Format("{item[label]}"),
+                id="vr_room_select",
+                items="vr_rooms",
+                item_id_getter=lambda item: item["id"],
+                on_click=on_vr_room_selected,
+            ),
+            width=2,
+        ),
+        Group(
+            Button(
+                Const("Отменить запись"),
+                id="vr_lab_unregister_rooms",
+                on_click=on_vr_lab_unregister,
+                when="show_unregister_button",
+            ),
+        ),
+        Button(
+            Const("⬅️ Назад"),
+            id="vr_lab_back_to_day",
+            on_click=on_vr_back_to_day,
+        ),
+        state=TimetableSG.vr_lab_rooms,
+        getter=get_vr_lab_rooms_data,
+        parse_mode="HTML",
+    ),
+
+    Window(
+        Format("{vr_lab_slots_header}"),
+        Group(
+            Select(
+                Format("{item[label]}"),
+                id="vr_slot_select",
+                items="vr_slots",
+                item_id_getter=lambda item: item["id"],
+                on_click=on_vr_slot_selected,
+            ),
+            width=2,
+        ),
+        Group(
+            Button(
+                Const("Отменить запись"),
+                id="vr_lab_unregister_slots",
+                on_click=on_vr_lab_unregister,
+                when="show_unregister_button",
+            ),
+        ),
+        Button(
+            Const("⬅️ К аудиториям"),
+            id="vr_lab_back_to_rooms",
+            on_click=on_vr_back_to_rooms,
+        ),
+        state=TimetableSG.vr_lab_slots,
+        getter=get_vr_lab_slots_data,
+        parse_mode="HTML",
     ),
     
     # Окно с детальной информацией о событии

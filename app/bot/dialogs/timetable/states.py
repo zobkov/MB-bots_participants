@@ -6,3 +6,5 @@ class TimetableSG(StatesGroup):
     day_events = State()
     group_events = State()
     event_detail = State()
+    vr_lab_rooms = State()
+    vr_lab_slots = State()
