@@ -400,7 +400,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
             user_group_registrations[group_id] = current_event_id
             dialog_manager.dialog_data["user_group_registrations"] = user_group_registrations
 
-    sorted_events = sorted(events, key=lambda e: e.get("title", ""))
+    sorted_events = sorted(events, key=lambda e: e.get("short_title") or e.get("title", ""))
     events_payload = []
     availability_lines: List[str] = []
     for event in sorted_events:
@@ -410,6 +410,8 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
         remaining = max(0, capacity - taken)
         is_current = current_event_id == event_id
         locked = bool(current_event_id and current_event_id != event_id)
+        display_name = event.get("short_title") or event.get("title", "")
+
         if is_current:
             prefix = "✅ "
             info_line = f"Вы зарегистрированы · Осталось мест: {remaining}/{capacity}"
@@ -420,7 +422,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
             prefix = "🔒 " if remaining <= 0 else ""
             info_line = f" | Осталось мест: {remaining}/{capacity}"
 
-        label = f"{prefix}{event['title']}\n{info_line}"
+        label = f"{prefix}{display_name}\n{info_line}"
         events_payload.append({
             "id": f"event:{event_id}",
             "label": label,
@@ -429,7 +431,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
         location = event.get("location") or ""
         location_suffix = f" ({location})" if location else ""
         availability_lines.append(
-            f"\n• <b>{event['title']}</b>{location_suffix}\n  Осталось мест: {remaining}/{capacity}"
+            f"\n• <b>{display_name}</b>{location_suffix}\n  Осталось мест: {remaining}/{capacity}"
         )
 
     primary_event = sorted_events[0]

@@ -7,7 +7,8 @@
     "start_time": "10:50",
     "end_date": "2025-10-23",
     "end_time": "11:00",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "Открытие Конференции"
   },
   {
     "title": "Центральная пленарная сессия «Сильные регионы и города – основа экономики будущего»",
@@ -17,7 +18,8 @@
     "start_time": "11:00",
     "end_date": "2025-10-23",
     "end_time": "12:20",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "Центральная пленарная сессия"
   },
   {
     "title": "Обзор индустрий от компании «Яков и Партнёры",
@@ -27,7 +29,8 @@
     "start_time": "12:30",
     "end_date": "2025-10-23",
     "end_time": "13:30",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "Обзор индустрий «Яков и Партнёры"
   },
   {
     "title": "Кадры для будущего: как стать желанным кандидатом",
@@ -38,7 +41,8 @@
     "end_date": "2025-10-23",
     "end_time": "15:50",
     "registration_required": true,
-    "group_title": "Панельные дискуссии (параллель)"
+    "group_title": "Панельные дискуссии (параллель)",
+    "alias": "Кадры для будущего"
   },
   {
     "title": "Возрождение малых городов — новые центры притяжения",
@@ -49,7 +53,8 @@
     "end_date": "2025-10-23",
     "end_time": "15:50",
     "registration_required": true,
-    "group_title": "Панельные дискуссии (параллель)"
+    "group_title": "Панельные дискуссии (параллель)",
+    "alias": "Возрождение малых городов"
   },
   {
     "title": "Нейроны мегаполисов: AI, IoT и Big Data как цифровая нервная система",
@@ -60,7 +65,8 @@
     "end_date": "2025-10-23",
     "end_time": "15:50",
     "registration_required": true,
-    "group_title": "Панельные дискуссии (параллель)"
+    "group_title": "Панельные дискуссии (параллель)",
+    "alias": "Нейроны мегаполисов"
   },
   {
     "title": "Dream Team: как из группы людей сделать команду мечты",
@@ -71,7 +77,9 @@
     "end_date": "2025-10-23",
     "end_time": "18:00",
     "registration_required": true,
-    "group_title": "Практические воркшопы (параллель)"
+    "group_title": "Практические воркшопы (параллель)",
+    "capacity_override": 40,
+    "alias": "Dream Team"
   },
   {
     "title": "Город как бренд: как раскрыть идентичность территории",
@@ -82,7 +90,9 @@
     "end_date": "2025-10-23",
     "end_time": "18:00",
     "registration_required": true,
-    "group_title": "Практические воркшопы (параллель)"
+    "group_title": "Практические воркшопы (параллель)",
+    "capacity_override": 35,
+    "alias": "Город как бренд"
   },
   {
     "title": "Моделирование арктического города",
@@ -93,7 +103,9 @@
     "end_date": "2025-10-23",
     "end_time": "18:00",
     "registration_required": true,
-    "group_title": "Практические воркшопы (параллель)"
+    "group_title": "Практические воркшопы (параллель)",
+    "capacity_override": 40,
+    "alias": "Моделирование арктического города"
   },
   {
     "title": "Индивидуальное мероприятие ВТБ — «Переговоры в рамках сделок долгового финансирования»",
@@ -103,7 +115,9 @@
     "start_time": "09:00",
     "end_date": "2025-10-24",
     "end_time": "10:20",
-    "registration_required": true
+    "registration_required": true,
+    "capacity_override": 60,
+    "alias": "Переговоры в рамках сделок"
   },
   {
     "title": "Панельная дискуссия — «Искусственный разум бизнеса»",
@@ -113,7 +127,9 @@
     "start_time": "09:00",
     "end_date": "2025-10-24",
     "end_time": "10:20",
-    "registration_required": true
+    "registration_required": true,
+    "capacity_override": 55,
+    "alias": "Искусственный разум бизнеса"
   },
   {
     "title": "Выступление А.Л. Костина, главы ВТБ",
@@ -123,7 +139,8 @@
     "start_time": "10:30",
     "end_date": "2025-10-24",
     "end_time": "11:50",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "Выступление А.Л. Костина"
   },
   {
     "title": "Сессия «Севергрупп» с участием Алексея Мордашова",
@@ -133,7 +150,8 @@
     "start_time": "12:10",
     "end_date": "2025-10-24",
     "end_time": "13:50",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "Сессия «Севергрупп»"
   },
   {
     "title": "HR-фуршет: стендовая сессия компаний-партнеров",
@@ -143,7 +161,8 @@
     "start_time": "15:00",
     "end_date": "2025-10-24",
     "end_time": "16:00",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "HR-фуршет"
   },
   {
     "title": "VR-lab: индивидуальный тренинг по подготовке к собеседованию",
@@ -153,7 +172,8 @@
     "start_time": "14:00",
     "end_date": "2025-10-24",
     "end_time": "16:00",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "VR-lab"
   },
   {
     "title": "Индивидуальное мероприятие ВТБ — «От идеи к рынку: как родился цифровой продукт “Скретч-карта”»",
@@ -163,7 +183,8 @@
     "start_time": "16:00",
     "end_date": "2025-10-24",
     "end_time": "17:20",
-    "registration_required": true
+    "registration_required": true,
+    "alias": "От идеи к рынку"
   },
   {
     "title": "Панельная дискуссия — «Космос и атом: экосистема, в которой мы живем»",
@@ -173,7 +194,8 @@
     "start_time": "16:00",
     "end_date": "2025-10-24",
     "end_time": "17:20",
-    "registration_required": true
+    "registration_required": true,
+    "alias": "Космос и атом"
   },
   {
     "title": "Управленческие дебаты",
@@ -183,7 +205,8 @@
     "start_time": "17:40",
     "end_date": "2025-10-24",
     "end_time": "19:00",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "Управленческие дебаты"
   },
   {
     "title": "Креативность как новая валюта — двигатель прогресса в мире бизнеса",
@@ -193,7 +216,8 @@
     "start_time": "09:00",
     "end_date": "2025-10-25",
     "end_time": "10:00",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "Креативность как новая валюта"
   },
   {
     "title": "555: 5 навыков — 5 кейсов — 5 советов",
@@ -203,7 +227,8 @@
     "start_time": "10:30",
     "end_date": "2025-10-25",
     "end_time": "11:50",
-    "registration_required": true
+    "registration_required": true,
+    "alias": "555: 5 навыков — 5 кейсов — 5 советов"
   },
   {
     "title": "Культура и искусство в цифровую эпоху",
@@ -213,7 +238,8 @@
     "start_time": "10:30",
     "end_date": "2025-10-25",
     "end_time": "11:50",
-    "registration_required": true
+    "registration_required": true,
+    "alias": "Культура и искусство в цифровую эпоху"
   },
   {
     "title": "Индивидуальное мероприятие Авито — «От “кораблей” до Forbes: как принимать яркие и неочевидные решения»",
@@ -223,7 +249,9 @@
     "start_time": "12:10",
     "end_date": "2025-10-25",
     "end_time": "13:30",
-    "registration_required": true
+    "registration_required": true,
+    "capacity_override": 35,
+    "alias": "От “кораблей” до Forbes"
   },
   {
     "title": "Мета-игра от Алабуги",
@@ -233,7 +261,9 @@
     "start_time": "12:10",
     "end_date": "2025-10-25",
     "end_time": "13:30",
-    "registration_required": true
+    "registration_required": true,
+    "capacity_override": 40,
+    "alias": "Мета-игра от Алабуги"
   },
   {
     "title": "Продуктовый кейс-баттл от Альфа-Банка",
@@ -243,7 +273,9 @@
     "start_time": "12:10",
     "end_date": "2025-10-25",
     "end_time": "15:50",
-    "registration_required": true
+    "registration_required": true,
+    "capacity_override": 40,
+    "alias": "Кейс-баттл от Альфа-Банка"
   },
   {
     "title": "Elevator pitch — защита идей проектов участников (регистрация для зрителей)",
@@ -254,7 +286,8 @@
     "end_date": "2025-10-25",
     "end_time": "15:50",
     "registration_required": true,
-    "capacity_override": 30
+    "capacity_override": 40,
+    "alias": "Elevator pitch"
   },
   {
     "title": "Продуктовый кейс-баттл от Альфа-Банка (продолжение)",
@@ -265,7 +298,8 @@
     "end_date": "2025-10-25",
     "end_time": "15:50",
     "registration_required": true,
-    "capacity_override": 0
+    "capacity_override": 0,
+    "alias": "Кейс-баттл от Альфа-Банка"
   },
   {
     "title": "Воркшоп по самопрезентации (с участием выпускников ВШМ СПбГУ)",
@@ -276,7 +310,8 @@
     "end_date": "2025-10-25",
     "end_time": "15:50",
     "registration_required": true,
-    "capacity_override": 30
+    "capacity_override": 30,
+    "alias": "Воркшоп по самопрезентации"
   },
   {
     "title": "MB Talks",
@@ -286,7 +321,8 @@
     "start_time": "16:00",
     "end_date": "2025-10-25",
     "end_time": "17:00",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "MB Talks"
   },
   {
     "title": "Закрытие Конференции",
@@ -296,6 +332,7 @@
     "start_time": "17:00",
     "end_date": "2025-10-25",
     "end_time": "18:30",
-    "registration_required": false
+    "registration_required": false,
+    "alias": "Закрытие Конференции"
   }
 ]

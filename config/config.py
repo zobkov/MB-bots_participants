@@ -60,6 +60,7 @@ class Event:
     registration_required: bool = False
     group_title: Optional[str] = None
     capacity_override: Optional[int] = None
+    alias: Optional[str] = None
 
     @property
     def start_datetime(self) -> datetime:
@@ -82,6 +83,11 @@ class Event:
             return None
         payload = f"{self.start_date}|{self.start_time}|parallel"
         return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
+
+    @property
+    def short_title(self) -> str:
+        """Return alias or fallback to full title for compact UI labels."""
+        return self.alias or self.title
 
 
 @dataclass

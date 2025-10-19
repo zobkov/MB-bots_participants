@@ -90,7 +90,7 @@ def build_day_schedule(events: List[Event]) -> Tuple[List[ScheduleItem], Dict[st
             schedule.append(
                 ScheduleItem(
                     item_id=f"event:{event.event_id}",
-                    label=f"{event.start_time} – {event.end_time} · {event.title}",
+                    label=f"{event.start_time} – {event.end_time} · {event.short_title}",
                     start_datetime=event.start_datetime.isoformat(),
                     type="simple",
                     group_id=None,
@@ -133,4 +133,6 @@ def serialize_event(event: Event) -> Dict[str, Any]:
         "registration_required": event.registration_required,
         "group_title": event.group_title,
         "capacity_override": event.capacity_override,
+        "alias": event.alias,
+        "short_title": event.short_title,
     }
