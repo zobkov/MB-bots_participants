@@ -13,7 +13,7 @@ async def go_to_timetable(callback: CallbackQuery, widget, manager: DialogManage
 
 async def go_to_registration(callback: CallbackQuery, widget, manager: DialogManager):
     """Переход в регистрацию на сессии"""
-    await manager.start(RegistrationSG.main)
+    #await manager.start(RegistrationSG.main)
 
 
 async def go_to_navigation(callback: CallbackQuery, widget, manager: DialogManager):
