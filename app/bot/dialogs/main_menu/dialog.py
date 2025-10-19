@@ -8,7 +8,7 @@ from .handlers import go_to_timetable, go_to_registration, go_to_navigation, go_
 
 main_menu_dialog = Dialog(
     Window(
-        Const("<b>Менеджмент Будущего 2025</b>\n<i>Главное меню участника конференции</i>\n\nДоступна запись на <b>дебаты</b>"),
+        Const("<b>Менеджмент Будущего 2025</b>\n<i>Главное меню участника конференции</i>\n\nДоступно расписание и регистрация на сессии."),
         Column(
             Button(
                 Const("Расписание и регистрация"),
