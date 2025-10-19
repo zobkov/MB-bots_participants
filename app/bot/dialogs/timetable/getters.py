@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from aiogram_dialog import DialogManager
 from aiogram_dialog.api.entities import MediaAttachment, MediaId
@@ -88,6 +88,14 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
                 if registration:
                     user_group_registrations[group_id] = registration.event_id
 
+        vr_lab_booking: Optional[Tuple[str, str]] = None
+        if user_id is not None:
+            vr_registration = await db_manager.get_user_event_registration(user_id, VR_LAB_GROUP_ID)
+            if vr_registration:
+                parsed_slot = parse_slot_event_id(vr_registration.event_id)
+                if parsed_slot:
+                    vr_lab_booking = parsed_slot
+
         dialog_manager.dialog_data["event_map"] = event_map
         dialog_manager.dialog_data["event_to_group"] = event_to_group
         dialog_manager.dialog_data["group_map"] = group_map
@@ -101,6 +109,7 @@ async def get_day_events_data(dialog_manager: DialogManager, **kwargs):
             event_map,
             group_map,
             user_group_registrations,
+            vr_lab_booking,
         )
 
         events_payload = [
@@ -211,12 +220,12 @@ async def get_vr_lab_rooms_data(dialog_manager: DialogManager, **kwargs):
         prefix = ""
         if room == registration_room:
             prefix = "✅ "
-            status_line = f"Вы записаны · Свободно: {remaining}/{TOTAL_SLOTS_PER_ROOM}"
+            status_line = f" | Твой слот · Свободно: {remaining}/{TOTAL_SLOTS_PER_ROOM}"
         elif remaining == 0:
             prefix = "🔒 "
-            status_line = f"Свободных слотов нет"
+            status_line = f" | Свободных слотов нет"
         else:
-            status_line = f"Свободно: {remaining}/{TOTAL_SLOTS_PER_ROOM}"
+            status_line = f" | Свободно: {remaining}/{TOTAL_SLOTS_PER_ROOM}"
 
         rooms_payload.append(
             {
@@ -235,7 +244,7 @@ async def get_vr_lab_rooms_data(dialog_manager: DialogManager, **kwargs):
         f"{event_payload['start_time']} – {event_payload['end_time']} · <b>{event_payload['title']}</b>",
     ]
     if event_payload.get("location"):
-        header_lines.append(f"Локация: {event_payload['location']}")
+        header_lines.append(f"{event_payload['location']}")
 
     header_lines.append("")
     header_lines.append("Выбери аудиторию VR-lab. В каждой аудитории слоты по 15 минут на одного участника.")
@@ -319,13 +328,13 @@ async def get_vr_lab_slots_data(dialog_manager: DialogManager, **kwargs):
 
         if is_current:
             prefix = "✅ "
-            status_line = "Вы записаны"
+            status_line = " Вы записаны"
         elif locked:
             prefix = "🔒 "
-            status_line = "Слот занят"
+            status_line = " Слот занят"
         else:
             prefix = ""
-            status_line = "Свободно"
+            status_line = " Свободно"
 
         slots_payload.append(
             {
@@ -552,6 +561,7 @@ def _compose_schedule_text(
     event_map: Dict[str, Dict[str, Any]],
     group_map: Dict[str, List[Dict[str, Any]]],
     user_group_registrations: Dict[str, str],
+    vr_lab_booking: Optional[Tuple[str, str]],
 ) -> str:
     header = f"<b>Расписание – {_format_day_label(start_date, day)}</b>\n"
     lines: List[str] = [header, ""]
@@ -562,7 +572,16 @@ def _compose_schedule_text(
             event = event_map.get(event_id)
             if not event:
                 continue
-            location = f" ({event.get('location', '')})" if event.get("location") else ""
+            if is_vr_lab_event(event):
+                if vr_lab_booking:
+                    room, slot = vr_lab_booking
+                    location = f" <i>— Твой слот: ауд. {room}, {slot}</i>"
+                elif event.get("location"):
+                    location = f" ({event.get('location', '')})"
+                else:
+                    location = ""
+            else:
+                location = f" ({event.get('location', '')})" if event.get("location") else ""
             lines.append(
                 f"{event['start_time']} – {event['end_time']} · <b>{event['title']}</b>{location}"
             )
