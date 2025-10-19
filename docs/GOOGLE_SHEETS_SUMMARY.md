@@ -19,7 +19,7 @@
 - **Добавлено:** `GoogleSheetsConfig` класс
 - **Переменные .env:**
   - `GOOGLE_CREDENTIALS_PATH=config/google_credentials.json`
-  - `GOOGLE_SPREADSHEET_ID=1287fqon85mH9w6v8jj9f63W7m44oBDAPNWcp9hIU_g4`
+  - `GOOGLE_SPREADSHEET_ID=1jyX_Sn17w7c-SdmcfZlxP6s5wyOSPw6KmLjO3xDs1fk`
 
 ### 3. Команда бота
 - **Файл:** `app/bot/handlers/commands.py`

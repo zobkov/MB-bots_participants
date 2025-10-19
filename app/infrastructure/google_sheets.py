@@ -110,7 +110,7 @@ class GoogleSheetsManager:
         # Combine headers and data (without statistics)
         return [headers] + data_rows
     
-    async def _clear_sheet(self, sheet_name: str):
+    async def _clear_sheet(self, sheet_name: str, clear_range: str = "A:ZZZ"):
         """Clear all data from a sheet"""
         try:
             # Get sheet properties to determine range
@@ -145,7 +145,7 @@ class GoogleSheetsManager:
                 logger.info(f"Created new sheet: {sheet_name}")
             else:
                 # Clear existing data
-                range_name = f"{sheet_name}!A:Z"
+                range_name = f"{sheet_name}!{clear_range}"
                 self.service.spreadsheets().values().clear(
                     spreadsheetId=self.spreadsheet_id,
                     range=range_name
@@ -226,3 +226,29 @@ class GoogleSheetsManager:
             ])
 
         return [headers] + rows
+
+    async def sync_event_registration_matrix(
+        self,
+        headers: List[Any],
+        rows: List[List[Any]],
+        sheet_name: str = "main",
+    ) -> bool:
+        """Write 0/1 registration matrix to Google Sheets."""
+
+        try:
+            if not self.service:
+                await self.init()
+
+            dataset = [headers] + rows
+            await self._clear_sheet(sheet_name)
+            await self._write_to_sheet(sheet_name, dataset)
+            logger.info(
+                "Event registration matrix synced: rows=%s, columns=%s, sheet=%s",
+                len(dataset),
+                len(headers),
+                sheet_name,
+            )
+            return True
+        except Exception as exc:
+            logger.error("Failed to sync event registration matrix: %s", exc)
+            return False

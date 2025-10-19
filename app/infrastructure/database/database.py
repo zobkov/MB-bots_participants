@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Set
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -320,3 +320,16 @@ class DatabaseManager:
                     }
                 )
             return payload
+
+    async def get_all_event_registrations_map(self) -> Dict[int, Set[str]]:
+        """Return mapping of user_id to registered event IDs."""
+        async with self.sessionmaker() as session:
+            result = await session.execute(
+                select(EventRegistration.user_id, EventRegistration.event_id)
+            )
+
+            mapping: Dict[int, Set[str]] = {}
+            for user_id, event_id in result.fetchall():
+                mapping.setdefault(int(user_id), set()).add(str(event_id))
+
+            return mapping

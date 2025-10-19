@@ -18,6 +18,11 @@ import logging
 
 from app.bot.states.start import StartSG
 from app.infrastructure.database import DatabaseManager
+from app.bot.dialogs.timetable.vr_lab import (
+    VR_LAB_ROOMS,
+    VR_LAB_SLOT_TIMES,
+    build_slot_event_id,
+)
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -97,6 +102,7 @@ async def help_command(message: Message):
             "/reset_user_registration <user_id> - Сбросить регистрацию пользователя\n"
             "/sync_debate_cache - Синхронизировать кеш с БД\n"
             "/sync_debates_google - Синхронизировать данные с Google Таблицами\n\n"
+            "/sync_reg_google - Экспорт регистраций по мероприятиям в Google\n\n"
             "<b>🧪 Команды для тестирования:</b>\n"
             "/test_error - Тестовая ошибка\n"
             "/test_warning - Тестовые предупреждения\n"
@@ -518,4 +524,101 @@ async def sync_debates_google_command(message: Message, dialog_manager: DialogMa
             "❌ <b>Критическая ошибка синхронизации</b>\n\n"
             f"Подробности в логах: {str(e)[:100]}...",
             parse_mode="HTML"
+        )
+
+
+@router.message(Command("sync_reg_google"))
+async def sync_reg_google_command(message: Message, dialog_manager: DialogManager):
+    """Экспорт регистраций по мероприятиям в Google Sheets (только для админов)."""
+    from config.config import load_config
+
+    config = load_config()
+    if message.from_user.id not in config.logging.admin_ids:
+        await message.answer("❌ У вас нет прав для выполнения этой команды")
+        return
+
+    db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+    google_sheets_manager = dialog_manager.middleware_data["google_sheets_manager"]
+
+    status_message = await message.answer("🔄 Формирую матрицу регистраций...")
+
+    try:
+        users_data = await db_manager.get_all_users_for_export()
+        registrations_map = await db_manager.get_all_event_registrations_map()
+
+        registrable_events = [
+            event for event in config.events if event.registration_required
+        ]
+        registrable_events.sort(key=lambda event: (event.start_date, event.start_time, event.title))
+
+        event_columns = []
+        seen_event_ids = set()
+        for event in registrable_events:
+            if event.event_id in seen_event_ids:
+                continue
+            seen_event_ids.add(event.event_id)
+            header = f"{event.start_date} {event.start_time} · {event.title}"
+            event_columns.append((event.event_id, header))
+
+        for room in VR_LAB_ROOMS:
+            for slot in VR_LAB_SLOT_TIMES:
+                event_id = build_slot_event_id(room, slot)
+                if event_id in seen_event_ids:
+                    continue
+                seen_event_ids.add(event_id)
+                header = f"VR-lab {room} {slot}"
+                event_columns.append((event_id, header))
+
+        registered_event_ids = set().union(*registrations_map.values()) if registrations_map else set()
+        extra_event_ids = sorted(registered_event_ids - seen_event_ids)
+        for event_id in extra_event_ids:
+            event_columns.append((event_id, f"Unknown {event_id}"))
+            seen_event_ids.add(event_id)
+
+        headers = ["user_id", "visible_name", "username"] + [label for _, label in event_columns]
+
+        rows = []
+        for user in users_data:
+            user_id = int(user["id"])
+            registered_events = registrations_map.get(user_id, set())
+            row = [
+                str(user_id),
+                user.get("visible_name", ""),
+                f"@{user['username']}" if user.get("username") else "",
+            ]
+            for event_id, _ in event_columns:
+                row.append(1 if event_id in registered_events else 0)
+            rows.append(row)
+
+        success = await google_sheets_manager.sync_event_registration_matrix(headers, rows, sheet_name="main")
+
+        if success:
+            await status_message.edit_text(
+                "✅ <b>Регистрации синхронизированы!</b>\n\n"
+                f"📋 Пользователи: {len(rows)}\n"
+                f"🧾 Колонок: {len(event_columns)}\n"
+                "🗂 Лист: main",
+                parse_mode="HTML",
+            )
+        else:
+            await status_message.edit_text(
+                "❌ <b>Не удалось обновить Google Таблицу</b>\n\n"
+                "Проверьте права доступа и повторите попытку.",
+                parse_mode="HTML",
+            )
+
+        logger.info(
+            "Admin %s synced registration matrix: success=%s, rows=%s, columns=%s",
+            message.from_user.id,
+            success,
+            len(rows),
+            len(event_columns),
+        )
+
+    except Exception as exc:
+        logger.error("Error during registration matrix sync: %s", exc)
+        await status_message.edit_text(
+            "❌ <b>Критическая ошибка при экспорте</b>\n\n"
+            f"Подробности в логах: {str(exc)[:120]}...",
+            parse_mode="HTML",
         )
