@@ -271,7 +271,7 @@ class GoogleSheetsManager:
         row: List[Any],
         sheet_name: str = "Лист1",
     ) -> bool:
-        """Append coach session application to dedicated spreadsheet."""
+        """Upsert coach session application into the dedicated spreadsheet."""
 
         target_spreadsheet_id = self.coach_spreadsheet_id or self.spreadsheet_id
 
@@ -281,30 +281,82 @@ class GoogleSheetsManager:
 
             self._ensure_sheet(sheet_name, target_spreadsheet_id)
 
-            # Ensure headers present when sheet empty
-            existing = self.service.spreadsheets().values().get(
+            header_result = self.service.spreadsheets().values().get(
                 spreadsheetId=target_spreadsheet_id,
                 range=f"{sheet_name}!A1:Z1",
             ).execute()
 
-            if not existing.get("values"):
+            sheet_headers = header_result.get("values") or []
+            if not sheet_headers:
                 await self._write_to_sheet(sheet_name, [headers], spreadsheet_id=target_spreadsheet_id)
+                sheet_headers = [headers]
 
-            body = {
-                "values": [row],
-                "majorDimension": "ROWS",
-            }
+            sheet_header_row = sheet_headers[0] if sheet_headers else []
+
+            telegram_id_value: Optional[str] = None
+            telegram_header_name = "Telegram ID"
+            try:
+                new_telegram_index = headers.index(telegram_header_name)
+                if new_telegram_index < len(row):
+                    candidate = str(row[new_telegram_index]).strip()
+                    telegram_id_value = candidate or None
+            except ValueError:
+                telegram_id_value = None
+
+            existing_row_index: Optional[int] = None
+            if telegram_id_value and sheet_header_row:
+                try:
+                    sheet_telegram_index = sheet_header_row.index(telegram_header_name)
+                except ValueError:
+                    sheet_telegram_index = None
+
+                if sheet_telegram_index is not None:
+                    existing_values = self.service.spreadsheets().values().get(
+                        spreadsheetId=target_spreadsheet_id,
+                        range=f"{sheet_name}!A2:ZZZ",
+                    ).execute()
+                    for offset, existing_row in enumerate(existing_values.get("values", []), start=2):
+                        if sheet_telegram_index < len(existing_row):
+                            if str(existing_row[sheet_telegram_index]).strip() == telegram_id_value:
+                                existing_row_index = offset
+                                break
+
+            if existing_row_index is not None:
+                row_to_write = list(row)
+                target_length = max(len(sheet_header_row), len(row_to_write))
+                if len(row_to_write) < target_length:
+                    row_to_write.extend([""] * (target_length - len(row_to_write)))
+
+                self.service.spreadsheets().values().update(
+                    spreadsheetId=target_spreadsheet_id,
+                    range=f"{sheet_name}!A{existing_row_index}",
+                    valueInputOption="USER_ENTERED",
+                    body={
+                        "values": [row_to_write],
+                        "majorDimension": "ROWS",
+                    },
+                ).execute()
+
+                logger.info(
+                    "Coach session entry updated for Telegram ID %s at row %s",
+                    telegram_id_value,
+                    existing_row_index,
+                )
+                return True
 
             self.service.spreadsheets().values().append(
                 spreadsheetId=target_spreadsheet_id,
                 range=f"{sheet_name}!A1",
                 valueInputOption="USER_ENTERED",
                 insertDataOption="INSERT_ROWS",
-                body=body,
+                body={
+                    "values": [row],
+                    "majorDimension": "ROWS",
+                },
             ).execute()
 
             logger.info("Coach session entry appended to sheet %s", target_spreadsheet_id)
             return True
         except Exception as exc:
-            logger.error("Failed to append coach session entry: %s", exc)
+            logger.error("Failed to upsert coach session entry: %s", exc)
             return False
