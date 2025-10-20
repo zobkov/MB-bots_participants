@@ -411,6 +411,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
         is_current = current_event_id == event_id
         locked = bool(current_event_id and current_event_id != event_id)
         display_name = event.get("short_title") or event.get("title", "")
+        full_title = event.get("title", "")
 
         if is_current:
             prefix = "✅ "
@@ -431,7 +432,7 @@ async def get_group_events_data(dialog_manager: DialogManager, **kwargs):
         location = event.get("location") or ""
         location_suffix = f" ({location})" if location else ""
         availability_lines.append(
-            f"\n• <b>{display_name}</b>{location_suffix}\n  Осталось мест: {remaining}/{capacity}"
+            f"\n• <b>{full_title}</b>{location_suffix}\n  Осталось мест: {remaining}/{capacity}"
         )
 
     primary_event = sorted_events[0]
