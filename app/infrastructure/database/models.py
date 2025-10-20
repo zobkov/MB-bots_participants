@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -49,3 +50,23 @@ class EventRegistration(Base):
             f"<EventRegistration(id={self.id}, user_id={self.user_id}, event_id='{self.event_id}', "
             f"group_id='{self.group_id}')>"
         )
+
+
+class CoachSessionRequest(Base):
+    """Stored coach session application."""
+
+    __tablename__ = "coach_session_requests"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    full_name = Column(String(255), nullable=False)
+    age = Column(Integer, nullable=True)
+    university = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False)
+    phone = Column(String(64), nullable=False)
+    telegram = Column(String(128), nullable=False)
+    request_text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return f"<CoachSessionRequest(id={self.id}, full_name='{self.full_name}', email='{self.email}')>"

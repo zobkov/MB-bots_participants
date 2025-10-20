@@ -3,13 +3,13 @@
 import logging
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, Dict, Any, List, Set
+from typing import Optional, Dict, Any, List, Set, Iterable
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from config.config import DatabaseConfig
-from .models import Base, EventRegistration, User
+from .models import Base, EventRegistration, User, CoachSessionRequest
 
 logger = logging.getLogger(__name__)
 
@@ -333,3 +333,57 @@ class DatabaseManager:
                 mapping.setdefault(int(user_id), set()).add(str(event_id))
 
             return mapping
+
+    async def delete_event_registrations(self, event_ids: Iterable[str]) -> int:
+        """Delete registrations for provided event identifiers."""
+        event_ids_list = [str(event_id) for event_id in event_ids if event_id]
+        if not event_ids_list:
+            return 0
+
+        async with self.sessionmaker() as session:
+            try:
+                stmt = delete(EventRegistration).where(EventRegistration.event_id.in_(event_ids_list))
+                result = await session.execute(stmt)
+                await session.commit()
+                deleted_count = result.rowcount or 0
+                logger.info("Deleted %s registrations for events", deleted_count)
+                return deleted_count
+            except Exception as exc:
+                logger.error("Failed to delete registrations for events %s: %s", event_ids_list, exc)
+                await session.rollback()
+                raise
+
+    async def create_coach_session_request(
+        self,
+        user_id: Optional[int],
+        full_name: str,
+        age: Optional[int],
+        university: str,
+        email: str,
+        phone: str,
+        telegram: str,
+        request_text: str,
+    ) -> CoachSessionRequest:
+        """Persist new coach session application."""
+
+        async with self.sessionmaker() as session:
+            try:
+                entry = CoachSessionRequest(
+                    user_id=user_id,
+                    full_name=full_name,
+                    age=age,
+                    university=university,
+                    email=email,
+                    phone=phone,
+                    telegram=telegram,
+                    request_text=request_text,
+                )
+                session.add(entry)
+                await session.commit()
+                await session.refresh(entry)
+                logger.info("Coach session request stored: id=%s", entry.id)
+                return entry
+            except Exception as exc:
+                await session.rollback()
+                logger.error("Failed to store coach session request: %s", exc)
+                raise

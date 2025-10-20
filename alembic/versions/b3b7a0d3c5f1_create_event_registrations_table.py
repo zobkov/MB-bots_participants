@@ -19,6 +19,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    if "event_registrations" in inspector.get_table_names():
+        existing_indexes = {index["name"] for index in inspector.get_indexes("event_registrations")}
+        desired_indexes = {
+            "ix_event_registrations_user_id": ("user_id",),
+            "ix_event_registrations_event_id": ("event_id",),
+            "ix_event_registrations_group_id": ("group_id",),
+        }
+
+        for name, columns in desired_indexes.items():
+            if name not in existing_indexes:
+                op.create_index(name, "event_registrations", list(columns), unique=False)
+        return
+
     op.create_table(
         "event_registrations",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),

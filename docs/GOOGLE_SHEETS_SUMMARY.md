@@ -20,6 +20,7 @@
 - **Переменные .env:**
   - `GOOGLE_CREDENTIALS_PATH=config/google_credentials.json`
   - `GOOGLE_SPREADSHEET_ID=1jyX_Sn17w7c-SdmcfZlxP6s5wyOSPw6KmLjO3xDs1fk`
+  - `GOOGLE_COACH_SPREADSHEET_ID=12ld3ccZg0hM6SsC6JO6dQk3d0bovslGTVm5m-b1EwOo`
 
 ### 3. Команда бота
 - **Файл:** `app/bot/handlers/commands.py`

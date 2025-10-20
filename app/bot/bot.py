@@ -66,7 +66,8 @@ async def setup_database_and_redis(config) -> tuple[DatabaseManager, RedisManage
     # Инициализация GoogleSheetsManager
     google_sheets_manager = GoogleSheetsManager(
         config.google_sheets.credentials_path,
-        config.google_sheets.spreadsheet_id
+        config.google_sheets.spreadsheet_id,
+        coach_spreadsheet_id=config.google_sheets.coach_spreadsheet_id,
     )
     
     # Проверяем подключение к Google Sheets (опционально)

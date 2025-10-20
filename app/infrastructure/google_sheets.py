@@ -16,10 +16,48 @@ class GoogleSheetsManager:
     
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
     
-    def __init__(self, credentials_path: str, spreadsheet_id: str):
+    def __init__(self, credentials_path: str, spreadsheet_id: str, coach_spreadsheet_id: Optional[str] = None):
         self.credentials_path = credentials_path
         self.spreadsheet_id = spreadsheet_id
+        self.coach_spreadsheet_id = coach_spreadsheet_id or spreadsheet_id
         self.service = None
+
+    def _ensure_sheet(self, sheet_name: str, spreadsheet_id: str) -> int:
+        """Ensure sheet exists, return its sheetId."""
+
+        sheet_metadata = self.service.spreadsheets().get(
+            spreadsheetId=spreadsheet_id
+        ).execute()
+
+        for sheet in sheet_metadata.get("sheets", []):
+            if sheet["properties"]["title"] == sheet_name:
+                return sheet["properties"].get("sheetId", 0)
+
+        request_body = {
+            "requests": [
+                {
+                    "addSheet": {
+                        "properties": {
+                            "title": sheet_name,
+                        }
+                    }
+                }
+            ]
+        }
+
+        response = self.service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body=request_body,
+        ).execute()
+
+        sheet_id = (
+            response.get("replies", [{}])[0]
+            .get("addSheet", {})
+            .get("properties", {})
+            .get("sheetId", 0)
+        )
+        logger.info("Created new sheet '%s' in spreadsheet %s", sheet_name, spreadsheet_id)
+        return sheet_id
         
     async def init(self):
         """Initialize Google Sheets service"""
@@ -110,56 +148,30 @@ class GoogleSheetsManager:
         # Combine headers and data (without statistics)
         return [headers] + data_rows
     
-    async def _clear_sheet(self, sheet_name: str, clear_range: str = "A:ZZZ"):
+    async def _clear_sheet(self, sheet_name: str, clear_range: str = "A:ZZZ", spreadsheet_id: Optional[str] = None):
         """Clear all data from a sheet"""
         try:
-            # Get sheet properties to determine range
-            sheet_metadata = self.service.spreadsheets().get(
-                spreadsheetId=self.spreadsheet_id
+            spreadsheet_id = spreadsheet_id or self.spreadsheet_id
+            # Ensure sheet exists
+            self._ensure_sheet(sheet_name, spreadsheet_id)
+
+            # Clear existing data
+            range_name = f"{sheet_name}!{clear_range}"
+            self.service.spreadsheets().values().clear(
+                spreadsheetId=spreadsheet_id,
+                range=range_name
             ).execute()
-            
-            # Find the sheet
-            sheet_id = None
-            for sheet in sheet_metadata.get('sheets', []):
-                if sheet['properties']['title'] == sheet_name:
-                    sheet_id = sheet['properties']['sheetId']
-                    break
-            
-            if sheet_id is None:
-                # Create the sheet if it doesn't exist
-                request_body = {
-                    'requests': [{
-                        'addSheet': {
-                            'properties': {
-                                'title': sheet_name
-                            }
-                        }
-                    }]
-                }
-                
-                self.service.spreadsheets().batchUpdate(
-                    spreadsheetId=self.spreadsheet_id,
-                    body=request_body
-                ).execute()
-                
-                logger.info(f"Created new sheet: {sheet_name}")
-            else:
-                # Clear existing data
-                range_name = f"{sheet_name}!{clear_range}"
-                self.service.spreadsheets().values().clear(
-                    spreadsheetId=self.spreadsheet_id,
-                    range=range_name
-                ).execute()
-                
-                logger.info(f"Cleared sheet: {sheet_name}")
+
+            logger.info(f"Cleared sheet: {sheet_name}")
                 
         except HttpError as e:
             logger.error(f"Error clearing sheet {sheet_name}: {e}")
             raise
     
-    async def _write_to_sheet(self, sheet_name: str, data: List[List]):
+    async def _write_to_sheet(self, sheet_name: str, data: List[List], spreadsheet_id: Optional[str] = None):
         """Write data to a sheet"""
         try:
+            spreadsheet_id = spreadsheet_id or self.spreadsheet_id
             range_name = f"{sheet_name}!A1"
             
             body = {
@@ -168,7 +180,7 @@ class GoogleSheetsManager:
             }
             
             result = self.service.spreadsheets().values().update(
-                spreadsheetId=self.spreadsheet_id,
+                spreadsheetId=spreadsheet_id,
                 range=range_name,
                 valueInputOption='USER_ENTERED',
                 body=body
@@ -251,4 +263,48 @@ class GoogleSheetsManager:
             return True
         except Exception as exc:
             logger.error("Failed to sync event registration matrix: %s", exc)
+            return False
+
+    async def append_coach_session_entry(
+        self,
+        headers: List[str],
+        row: List[Any],
+        sheet_name: str = "Лист1",
+    ) -> bool:
+        """Append coach session application to dedicated spreadsheet."""
+
+        target_spreadsheet_id = self.coach_spreadsheet_id or self.spreadsheet_id
+
+        try:
+            if not self.service:
+                await self.init()
+
+            self._ensure_sheet(sheet_name, target_spreadsheet_id)
+
+            # Ensure headers present when sheet empty
+            existing = self.service.spreadsheets().values().get(
+                spreadsheetId=target_spreadsheet_id,
+                range=f"{sheet_name}!A1:Z1",
+            ).execute()
+
+            if not existing.get("values"):
+                await self._write_to_sheet(sheet_name, [headers], spreadsheet_id=target_spreadsheet_id)
+
+            body = {
+                "values": [row],
+                "majorDimension": "ROWS",
+            }
+
+            self.service.spreadsheets().values().append(
+                spreadsheetId=target_spreadsheet_id,
+                range=f"{sheet_name}!A1",
+                valueInputOption="USER_ENTERED",
+                insertDataOption="INSERT_ROWS",
+                body=body,
+            ).execute()
+
+            logger.info("Coach session entry appended to sheet %s", target_spreadsheet_id)
+            return True
+        except Exception as exc:
+            logger.error("Failed to append coach session entry: %s", exc)
             return False

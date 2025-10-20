@@ -1,7 +1,8 @@
 import logging
+from datetime import datetime
 from typing import Optional
 
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message, User as TelegramUser
 from aiogram_dialog import DialogManager
 
 from app.infrastructure.database.database import (
@@ -9,6 +10,7 @@ from app.infrastructure.database.database import (
     EventRegistrationStatus,
 )
 from app.infrastructure.database.redis_manager import RedisManager
+from app.infrastructure.google_sheets import GoogleSheetsManager
 from .states import TimetableSG
 from .vr_lab import (
     VR_LAB_GROUP_ID,
@@ -17,6 +19,8 @@ from .vr_lab import (
 )
 
 logger = logging.getLogger(__name__)
+
+COACH_FORM_KEY = "coach_form"
 
 
 async def on_day_selected(callback: CallbackQuery, widget, dialog_manager: DialogManager, item_id: str):
@@ -267,4 +271,199 @@ async def on_vr_back_to_day(callback: CallbackQuery, widget, dialog_manager: Dia
 
 async def on_vr_back_to_rooms(callback: CallbackQuery, widget, dialog_manager: DialogManager):
     await dialog_manager.switch_to(TimetableSG.vr_lab_rooms)
+    await callback.answer()
+
+
+def _coach_form(dialog_manager: DialogManager) -> dict:
+    return dialog_manager.dialog_data.setdefault(COACH_FORM_KEY, {})
+
+
+def _normalize_telegram_handle(username: Optional[str]) -> str:
+    if not username:
+        return ""
+
+    handle = username.strip()
+    if not handle:
+        return ""
+
+    return handle if handle.startswith("@") else f"@{handle}"
+
+
+async def _ensure_telegram_from_context(
+    dialog_manager: DialogManager,
+    telegram_user: Optional[TelegramUser],
+) -> str:
+    form = _coach_form(dialog_manager)
+    if form.get("telegram"):
+        return form["telegram"]
+
+    username = getattr(telegram_user, "username", None) if telegram_user else None
+    handle = _normalize_telegram_handle(username)
+
+    if not handle and telegram_user:
+        db_manager: Optional[DatabaseManager] = dialog_manager.middleware_data.get("db_manager")
+        if db_manager:
+            db_user = await db_manager.get_user(telegram_user.id)
+            if db_user and db_user.username:
+                handle = _normalize_telegram_handle(db_user.username)
+
+    form["telegram"] = handle or ""
+    return form["telegram"]
+
+
+async def on_open_coach_intro(callback: CallbackQuery, widget, dialog_manager: DialogManager):
+    dialog_manager.dialog_data.pop(COACH_FORM_KEY, None)
+    await dialog_manager.switch_to(TimetableSG.coach_intro)
+    await callback.answer()
+
+
+async def on_coach_start_form(callback: CallbackQuery, widget, dialog_manager: DialogManager):
+    dialog_manager.dialog_data[COACH_FORM_KEY] = {}
+    await _ensure_telegram_from_context(dialog_manager, callback.from_user)
+    await dialog_manager.switch_to(TimetableSG.coach_full_name)
+    await callback.answer()
+
+
+async def on_coach_cancel(callback: CallbackQuery, widget, dialog_manager: DialogManager):
+    dialog_manager.dialog_data.pop(COACH_FORM_KEY, None)
+    await dialog_manager.switch_to(TimetableSG.days_list)
+    await callback.answer("Отправка отменена")
+
+
+async def coach_full_name_entered(message: Message, widget, dialog_manager: DialogManager, value: str):
+    text = value.strip()
+    if len(text.split()) < 2:
+        await message.answer("Пожалуйста, укажите ФИО полностью.")
+        return
+
+    _coach_form(dialog_manager)["full_name"] = text
+    await dialog_manager.switch_to(TimetableSG.coach_age)
+
+
+async def coach_age_entered(message: Message, widget, dialog_manager: DialogManager, value: str):
+    text = value.strip()
+    try:
+        age = int(text)
+    except ValueError:
+        await message.answer("Возраст нужно указать цифрами.")
+        return
+
+    if age < 14 or age > 120:
+        await message.answer("Укажите реальный возраст (14-120).")
+        return
+
+    _coach_form(dialog_manager)["age"] = age
+    await dialog_manager.switch_to(TimetableSG.coach_university)
+
+
+async def coach_university_entered(message: Message, widget, dialog_manager: DialogManager, value: str):
+    text = value.strip()
+    if not text:
+        await message.answer("Название университета не может быть пустым.")
+        return
+
+    _coach_form(dialog_manager)["university"] = text
+    await dialog_manager.switch_to(TimetableSG.coach_email)
+
+
+async def coach_email_entered(message: Message, widget, dialog_manager: DialogManager, value: str):
+    text = value.strip()
+    if "@" not in text or "." not in text.split("@")[-1]:
+        await message.answer("Похоже, email указан некорректно. Попробуйте снова.")
+        return
+
+    _coach_form(dialog_manager)["email"] = text
+    await dialog_manager.switch_to(TimetableSG.coach_phone)
+
+
+async def coach_phone_entered(message: Message, widget, dialog_manager: DialogManager, value: str):
+    text = value.strip()
+    if not text:
+        await message.answer("Номер телефона не может быть пустым.")
+        return
+
+    _coach_form(dialog_manager)["phone"] = text
+    await _ensure_telegram_from_context(dialog_manager, message.from_user)
+    await dialog_manager.switch_to(TimetableSG.coach_request)
+
+
+async def coach_request_entered(message: Message, widget, dialog_manager: DialogManager, value: str):
+    text = value.strip()
+    if not text:
+        await message.answer("Расскажите коротко о запросе для коуч-сессии.")
+        return
+
+    _coach_form(dialog_manager)["request_text"] = text
+    await dialog_manager.switch_to(TimetableSG.coach_summary)
+
+
+async def on_coach_restart(callback: CallbackQuery, widget, dialog_manager: DialogManager):
+    await dialog_manager.switch_to(TimetableSG.coach_full_name)
+    await callback.answer()
+
+
+async def on_coach_confirm(callback: CallbackQuery, widget, dialog_manager: DialogManager):
+    await _ensure_telegram_from_context(dialog_manager, callback.from_user)
+    form = dialog_manager.dialog_data.get(COACH_FORM_KEY)
+    if not form:
+        await callback.answer("Анкета не найдена", show_alert=True)
+        return
+
+    db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+    sheets_manager: GoogleSheetsManager = dialog_manager.middleware_data["google_sheets_manager"]
+
+    try:
+        entry = await db_manager.create_coach_session_request(
+            user_id=callback.from_user.id,
+            full_name=form.get("full_name", ""),
+            age=form.get("age"),
+            university=form.get("university", ""),
+            email=form.get("email", ""),
+            phone=form.get("phone", ""),
+            telegram=form.get("telegram", ""),
+            request_text=form.get("request_text", ""),
+        )
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        headers = [
+            "Дата и время",
+            "ФИО",
+            "Возраст",
+            "Университет",
+            "Email",
+            "Телефон",
+            "Telegram",
+            "Запрос",
+            "Telegram ID",
+            "Запись ID",
+        ]
+        row = [
+            timestamp,
+            entry.full_name,
+            entry.age or "",
+            entry.university,
+            entry.email,
+            entry.phone,
+            entry.telegram,
+            entry.request_text,
+            str(callback.from_user.id),
+            entry.id,
+        ]
+
+        success = await sheets_manager.append_coach_session_entry(headers, row)
+        if not success:
+            logger.warning("Coach session entry stored but failed to append to Google Sheets")
+
+        dialog_manager.dialog_data["coach_entry_id"] = entry.id
+        await dialog_manager.switch_to(TimetableSG.coach_success)
+        await callback.answer("Анкета отправлена")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to submit coach session request", exc_info=exc)
+        await callback.answer("Не удалось сохранить данные", show_alert=True)
+
+
+async def on_coach_finish(callback: CallbackQuery, widget, dialog_manager: DialogManager):
+    dialog_manager.dialog_data.pop(COACH_FORM_KEY, None)
+    dialog_manager.dialog_data.pop("coach_entry_id", None)
+    await dialog_manager.switch_to(TimetableSG.days_list)
     await callback.answer()

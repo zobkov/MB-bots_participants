@@ -30,6 +30,7 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 TOTAL_PARALLEL_CAPACITY = 115
+COACH_FORM_KEY = "coach_form"
 
 
 async def get_days_data(dialog_manager: DialogManager, **kwargs):
@@ -609,3 +610,29 @@ def _compose_schedule_text(
         lines.append("")
 
     return "\n".join(lines).strip()
+
+
+async def get_coach_summary_data(dialog_manager: DialogManager, **kwargs):
+    form: Dict[str, Any] = dialog_manager.dialog_data.get(COACH_FORM_KEY, {})
+
+    telegram_value = (form.get("telegram") or "").strip()
+    if telegram_value:
+        telegram_line = f"<b>Telegram:</b> {telegram_value}"
+    else:
+        telegram_line = "<b>Telegram:</b> — (не найдено в телеграм-профиле)"
+
+    summary_lines = [
+        "<b>Проверь данные анкеты:</b>",
+        "",
+        f"<b>ФИО:</b> {form.get('full_name', '—')}",
+        f"<b>Возраст:</b> {form.get('age', '—')}",
+        f"<b>Университет:</b> {form.get('university', '—')}",
+        f"<b>Email:</b> {form.get('email', '—')}",
+        f"<b>Телефон:</b> {form.get('phone', '—')}",
+        telegram_line,
+        "",
+        "<b>Запрос на коуч-сессию:</b>",
+        form.get("request_text", "—"),
+    ]
+
+    return {"coach_summary": "\n".join(summary_lines)}

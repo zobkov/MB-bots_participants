@@ -46,6 +46,7 @@ class LoggingConfig:
 class GoogleSheetsConfig:
     credentials_path: str
     spreadsheet_id: str
+    coach_spreadsheet_id: Optional[str] = None
 
 
 @dataclass
@@ -164,9 +165,13 @@ def load_config(path: str = None) -> Config:
     )
 
     # Конфигурация Google Sheets
+    coach_sheet_id_raw = env.str("GOOGLE_COACH_SPREADSHEET_ID", default="")
+    coach_sheet_id = coach_sheet_id_raw.strip() or None
+
     google_sheets_config = GoogleSheetsConfig(
         credentials_path=env.str("GOOGLE_CREDENTIALS_PATH", "config/google_credentials.json"),
-        spreadsheet_id=env.str("GOOGLE_SPREADSHEET_ID")
+        spreadsheet_id=env.str("GOOGLE_SPREADSHEET_ID"),
+        coach_spreadsheet_id=coach_sheet_id,
     )
 
     # Загрузка конфигурации из JSON
