@@ -313,6 +313,7 @@ async def _ensure_telegram_from_context(
 
 async def on_open_coach_intro(callback: CallbackQuery, widget, dialog_manager: DialogManager):
     dialog_manager.dialog_data.pop(COACH_FORM_KEY, None)
+    dialog_manager.dialog_data["coach_user_id"] = callback.from_user.id
     await dialog_manager.switch_to(TimetableSG.coach_intro)
     await callback.answer()
 

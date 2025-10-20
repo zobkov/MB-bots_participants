@@ -31,6 +31,35 @@ logger = logging.getLogger(__name__)
 
 TOTAL_PARALLEL_CAPACITY = 115
 COACH_FORM_KEY = "coach_form"
+COACH_EXISTING_NOTE = (
+    "\n✅ <b>Мы получили твою запись!</b> Время твоей сессии будет назначено после завершения конференции. "
+    "Не пропусти сообщение!\n\nТы также можешь еще раз заполнить анкету если хочешь поменять что-то."
+)
+
+
+async def get_coach_intro_data(dialog_manager: DialogManager, **kwargs):
+    base_text = (
+        "<b>Коучинговые сессии-профилирование со специалистами из международной лаборатории лидерства "
+        "LeaderMakers</b>\n\n"
+        "На сессии вы сможете разобрать свой запрос, получить персональный отчет о ваших сильных сторонах "
+        "и создать четкий план для раскрытия лидерского потенциала."
+    )
+
+    try:
+        db_manager: DatabaseManager = dialog_manager.middleware_data["db_manager"]
+        user_id = dialog_manager.dialog_data.get("coach_user_id")
+        if user_id is not None:
+            existing_entry = await db_manager.get_last_coach_session_request(user_id)
+        else:
+            existing_entry = None
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to prepare coach intro data", exc_info=exc)
+        existing_entry = None
+
+    if existing_entry:
+        return {"coach_intro_text": f"{base_text}\n\n{COACH_EXISTING_NOTE}"}
+
+    return {"coach_intro_text": base_text}
 
 
 async def get_days_data(dialog_manager: DialogManager, **kwargs):

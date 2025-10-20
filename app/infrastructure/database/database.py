@@ -387,3 +387,18 @@ class DatabaseManager:
                 await session.rollback()
                 logger.error("Failed to store coach session request: %s", exc)
                 raise
+
+    async def get_last_coach_session_request(self, user_id: int) -> Optional[CoachSessionRequest]:
+        """Fetch the most recent coach session request for the user, if it exists."""
+
+        async with self.sessionmaker() as session:
+            result = await session.execute(
+                select(CoachSessionRequest)
+                .where(CoachSessionRequest.user_id == user_id)
+                .order_by(CoachSessionRequest.created_at.desc())
+                .limit(1)
+            )
+            entry = result.scalar_one_or_none()
+            if entry:
+                logger.debug("Found existing coach session request id=%s for user %s", entry.id, user_id)
+            return entry

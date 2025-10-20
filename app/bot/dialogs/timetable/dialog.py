@@ -37,6 +37,7 @@ from .getters import (
     get_event_detail_data,
     get_vr_lab_rooms_data,
     get_vr_lab_slots_data,
+    get_coach_intro_data,
     get_coach_summary_data,
 )
 
@@ -192,10 +193,7 @@ timetable_dialog = Dialog(
 
     # Коуч-сессии: ввод анкеты
     Window(
-        Const("""<b>Коучинговые сессии-профилирование со специалистами из международной лаборатории лидерства LeaderMakers</b>
-
-На сессии вы сможете разобрать свой запрос, получить персональный отчет о ваших сильных сторонах и создать четкий план для раскрытия лидерского потенциала."""
-        ),
+        Format("{coach_intro_text}"),
         Button(
             Const("Хочу на консультацию"),
             id="coach_start",
@@ -207,6 +205,7 @@ timetable_dialog = Dialog(
             on_click=on_coach_cancel,
         ),
         state=TimetableSG.coach_intro,
+        getter=get_coach_intro_data,
         parse_mode="HTML",
     ),
 
