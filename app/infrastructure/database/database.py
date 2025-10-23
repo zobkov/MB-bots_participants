@@ -353,6 +353,27 @@ class DatabaseManager:
                 await session.rollback()
                 raise
 
+    async def delete_event_registrations_by_group(self, group_id: str) -> int:
+        """Delete all registrations bound to a specific parallel group."""
+
+        clean_group_id = (group_id or "").strip()
+        if not clean_group_id:
+            logger.warning("Attempted to delete registrations for empty group id")
+            return 0
+
+        async with self.sessionmaker() as session:
+            try:
+                stmt = delete(EventRegistration).where(EventRegistration.group_id == clean_group_id)
+                result = await session.execute(stmt)
+                await session.commit()
+                deleted_count = result.rowcount or 0
+                logger.info("Deleted %s registrations for group %s", deleted_count, clean_group_id)
+                return deleted_count
+            except Exception as exc:
+                logger.error("Failed to delete registrations for group %s: %s", clean_group_id, exc)
+                await session.rollback()
+                raise
+
     async def create_coach_session_request(
         self,
         user_id: Optional[int],
